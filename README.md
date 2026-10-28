@@ -17,14 +17,12 @@ No build step or dependencies are required. Serve this directory using any stati
 
 ## Features and data
 
-Shortest-path routing, 3E/4E baseline distances, configurable fares and speed, custom towns and connections, edit/remove controls, right-click actions and network backup export. The Thaliost–Rekkenmark bridge is broken and excluded from routing by default.
+Fastest-route planning (travel time plus a layover at every intermediate stop), 3E/4E baseline distances, configurable fares and speed, custom towns and connections, edit/remove controls, right-click / long-press map actions and network backup export and import. The Thaliost–Rekkenmark bridge is broken and excluded from routing by default.
 
 Additional reference-map towns and railways are in the Custom collection and can be edited, removed or excluded from display and routing. Unverified does not necessarily mean non-canon. See ATLAS-NOTES.md for limitations.
 
-Settings are stored locally in the browser. Settings on the old Sites domain do not automatically transfer to the GitHub Pages domain.
+Settings are stored locally in the browser. Settings on the old Sites domain do not automatically transfer to the GitHub Pages domain: use Export backup there and Import backup here. Importing keeps the replaced settings in lightningRailSettingsBeforeImport; unreadable saved data is kept in lightningRailSettingsCorrupt instead of being overwritten.
 
 ## Source
 
 Exported from the actual Site checkout at source commit cb5a82c25a7608f252e27b2ea05e4d2723f8460d. Original calculator: https://github.com/grJDh/eberron-trains (read-only reference; not modified by this transfer).
-
-The obsolete style.css belongs to the previous reconstructed version and is not loaded by the exported application.

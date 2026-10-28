@@ -26,6 +26,7 @@
 .custom-folder p { font-size: 13px; line-height: 1.5; color: #46616a; }
 .custom-folder label { display: block; font-size: 14px; line-height: 1.5; }
 .custom-folder input { accent-color: #198892; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--bg); }
@@ -131,16 +132,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .town-list .custom-route-item i { width: 10px; height: 10px; border: 2px solid var(--cyan-deep); transform: rotate(45deg); background: #fffdf7; }
 
 .map-stage { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(circle at 60% 45%, #153640 0%, #0a222c 58%, #071820 100%); touch-action: none; user-select: none; }
-#railMap { width: 100%; height: 100%; display: block; cursor: grab; }
+#railMap { width: 100%; height: 100%; display: block; cursor: grab; -webkit-touch-callout: none; -webkit-user-select: none; }
 #railMap.dragging { cursor: grabbing; }
 #mapViewport { transform-origin: 0 0; transition: transform .28s ease; }
 #railMap.dragging #mapViewport { transition: none; }
-.continent { fill: #193b43; stroke: rgba(150, 193, 192, .28); stroke-width: 2; }
-.nation { stroke: rgba(136, 178, 178, .15); stroke-width: 2; }
-.nation.breland { fill: #1a454c; }.nation.aundair { fill: #23434b; }.nation.thrane { fill: #3b4241; }
-.nation.karrnath { fill: #253f46; }.nation.talenta { fill: #3c493c; }.nation.mournland { fill: #29343b; stroke-dasharray: 7 7; }
-.nation.zilargo { fill: #23494c; }
-.nation-labels text { fill: rgba(192, 215, 211, .19); font-size: 18px; font-weight: 800; letter-spacing: .2em; text-anchor: middle; }
 .rail-base { stroke: #061116; stroke-width: 9; stroke-linecap: round; }
 .rail-line { stroke: #68888b; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 2 8; }
 .rail-custom { stroke: var(--cyan); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 11 7; filter: drop-shadow(0 0 4px rgba(99, 213, 215, .45)); }
