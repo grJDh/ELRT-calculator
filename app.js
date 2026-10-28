@@ -2,21 +2,14 @@
   "use strict";
 
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const RAILS_4E = [
+  // Built-in network: distances measured on the 4E map.
+  const RAILS = [
     ["Krona Peak","Irontown",104],["Irontown","Vulyar",315],["Korth","Rekkenmark",112],["Korth","Atur",195],
     ["Atur","Vedykar",148],["Vedykar","Fort Zombie",142],["Sharn","First Tower",44],["First Tower","Wroat",250],
     ["Wroat","Hatheril",478],["Hatheril","Starilaskur",223],["Hatheril","Sword Keep",106],["Wroat","Starilaskur",617],
     ["Starilaskur","Sterngate",269],["Starilaskur","Vathirond",198],["Vathirond","Aruldusk",142],["Aruldusk","Sigilstar",99],
     ["Sigilstar","Flamekeep",194],["Sword Keep","Marketplace",96],["Marketplace","Passage",255],["Passage","Fairhaven",227],
     ["Fairhaven","Thaliost",361],["Sterngate","Zolanberg",214],["Zolanberg","Korranberg",195]
-  ];
-  const RAILS_3E = [
-    ["Krona Peak","Irontown",142],["Irontown","Vulyar",456],["Korth","Rekkenmark",141],["Korth","Atur",332],
-    ["Atur","Vedykar",227],["Vedykar","Fort Zombie",239],["Sharn","First Tower",56],["First Tower","Wroat",417],
-    ["Wroat","Hatheril",717],["Hatheril","Starilaskur",372],["Hatheril","Sword Keep",150],["Wroat","Starilaskur",939],
-    ["Starilaskur","Sterngate",369],["Starilaskur","Vathirond",287],["Vathirond","Aruldusk",262],["Aruldusk","Sigilstar",166],
-    ["Sigilstar","Flamekeep",300],["Sword Keep","Marketplace",97],["Marketplace","Passage",369],["Passage","Fairhaven",348],
-    ["Fairhaven","Thaliost",617],["Sterngate","Zolanberg",386],["Zolanberg","Korranberg",300]
   ];
   const FIXED_LINKS = [["Vedykar","Vulyar",147],["Vulyar","Gatherhold",302]];
   const BROKEN_LINKS = [["Thaliost","Rekkenmark"],["Fort Zombie","Vathirond"],["Vathirond","Sterngate"]];
@@ -51,7 +44,7 @@
   });
   BASE_STATIONS.Thaliost.l=[-7,-7,"end"];
   BASE_STATIONS["First Tower"].l=[7,10,"start"];
-  const DEFAULTS = {source:"4e",speed:30,layover:1,fares:[],connections:[],disabledConnections:[],customStations:[]};
+  const DEFAULTS = {speed:30,layover:1,fares:[],connections:[],disabledConnections:[],customStations:[]};
   // localStorage can be unavailable (private mode, blocked site data) or full; never let that break the app.
   const STORAGE_KEY="lightningRailSettings";
   function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
@@ -62,7 +55,7 @@
     svg:$("railMap"),viewport:$("mapViewport"),stage:$("mapStage"),railLines:$("railLines"),stationLayer:$("stationLayer"),
     from:$("fromStation"),to:$("toStation"),fromMode:$("fromModeButton"),toMode:$("toModeButton"),hint:$("selectionHint"),
     error:$("routeError"),stations:$("stations"),routeList:$("routeList"),fareList:$("fareList"),fareFilter:$("fareFilter"),
-    headerSource:$("headerDistanceSource"),dialog:$("settingsDialog"),source:$("distanceSource"),speed:$("speedInput"),
+    dialog:$("settingsDialog"),speed:$("speedInput"),
     layover:$("layoverInput"),fareRows:$("fareRows"),tooltip:$("stationTooltip"),toast:$("toast"),
     networkButton:$("networkButton"),networkEditor:$("networkEditor"),networkFrom:$("networkFrom"),networkTo:$("networkTo"),
     networkFromLabel:$("networkFromLabel"),networkToLabel:$("networkToLabel"),networkDistance:$("networkDistance"),
@@ -137,7 +130,6 @@
       name:String(fare.name || ""),tier:String(fare.tier || ""),price:Math.max(0,Number(fare.price) || 0),basis:["mile","day","hour"].includes(fare.basis) ? fare.basis : "mile"
     })) : [];
     return {
-      source:saved.source === "3e" ? "3e" : "4e",
       speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
       layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
       fares,
@@ -173,11 +165,10 @@
       return seededDefaults();
     }
   }
-  function getBuiltInRails() { return settings.source === "3e" ? RAILS_3E : RAILS_4E; }
-  function isBuiltInEdge(key) { return [...RAILS_4E,...RAILS_3E].some(connection => edgeKey(connection[0],connection[1]) === key); }
+  function isBuiltInEdge(key) { return RAILS.some(connection => edgeKey(connection[0],connection[1]) === key); }
   function getRails() {
     const merged=new Map();
-    [...getBuiltInRails(),...(settings.showCustom === false ? [] : settings.connections)].forEach(connection => merged.set(edgeKey(connection[0],connection[1]),connection));
+    [...RAILS,...(settings.showCustom === false ? [] : settings.connections)].forEach(connection => merged.set(edgeKey(connection[0],connection[1]),connection));
     return [...merged.entries()].filter(([key]) => !settings.disabledConnections.includes(key)).map(([,connection]) => connection);
   }
   function getStation(name) {
@@ -677,7 +668,7 @@
     row.querySelector(".remove-button").addEventListener("click",()=>row.remove()); els.fareRows.append(row);
   }
   function openSettings() {
-    els.source.value=settings.source; els.speed.value=settings.speed; els.layover.value=settings.layover;
+    els.speed.value=settings.speed; els.layover.value=settings.layover;
     els.fareRows.replaceChildren(); settings.fares.forEach(addFareRow); els.dialog.showModal();
   }
   function saveSettings() {
@@ -685,16 +676,14 @@
       name:row.querySelector('[data-field="name"]').value.trim(),tier:row.querySelector('[data-field="tier"]').value.trim(),
       price:Number(row.querySelector('[data-field="price"]').value),basis:row.querySelector('[data-field="basis"]').value
     })).filter(fare => fare.name && fare.tier && fare.price >= 0);
-    settings={...settings,source:els.source.value,speed:Math.max(1,Number(els.speed.value)||30),layover:Math.max(0,Number(els.layover.value)||0),fares};
-    persistSettings(); syncSourceControls(); els.dialog.close(); planJourney(); toast("Journey settings saved");
+    settings={...settings,speed:Math.max(1,Number(els.speed.value)||30),layover:Math.max(0,Number(els.layover.value)||0),fares};
+    persistSettings(); els.dialog.close(); planJourney(); toast("Journey settings saved");
   }
-  function syncSourceControls() { els.source.value=settings.source; els.headerSource.value=settings.source; }
 
   els.fromMode.addEventListener("click",()=>setActiveField("from")); els.toMode.addEventListener("click",()=>setActiveField("to"));
   els.from.addEventListener("focus",()=>setActiveField("from")); els.to.addEventListener("focus",()=>setActiveField("to"));
   [els.from,els.to].forEach(input => input.addEventListener("change",planJourney));
   $("swapButton").addEventListener("click",()=>{ [els.from.value,els.to.value]=[els.to.value,els.from.value]; planJourney(); });
-  els.headerSource.addEventListener("change",()=>{ settings.source=els.headerSource.value; persistSettings(); syncSourceControls(); planJourney(); });
   els.fareFilter.addEventListener("change",renderFares);
   els.networkButton.addEventListener("click",()=>networkEditing ? closeNetworkEditor() : openNetworkEditor());
   $("closeNetworkButton").addEventListener("click",closeNetworkEditor);
@@ -731,14 +720,14 @@
     if (!window.confirm(`Replace your current network and settings with this backup?\n\n${summary}`)) return;
     storageSet("lightningRailSettingsBeforeImport",JSON.stringify(settings));
     settings=imported; persistSettings();
-    resetTownEditor(); $("showCustom").checked=settings.showCustom !== false; syncSourceControls();
+    resetTownEditor(); $("showCustom").checked=settings.showCustom !== false;
     refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
     toast("Backup imported");
   });
   $("settingsButton").addEventListener("click",openSettings); $("addFare").addEventListener("click",()=>addFareRow()); $("saveSettings").addEventListener("click",saveSettings);
   $("resetSettings").addEventListener("click",()=>{
     if (!window.confirm("Reset fares, custom towns, and railways to atlas defaults?")) return;
-    settings=seededDefaults(); persistSettings(); resetTownEditor(); $("showCustom").checked=true; syncSourceControls(); els.speed.value=settings.speed; els.layover.value=settings.layover; els.fareRows.replaceChildren(); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas defaults restored");
+    settings=seededDefaults(); persistSettings(); resetTownEditor(); $("showCustom").checked=true; els.speed.value=settings.speed; els.layover.value=settings.layover; els.fareRows.replaceChildren(); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas defaults restored");
   });
   $("copyButton").addEventListener("click",async()=>{
     if (!currentJourney) return;
@@ -792,5 +781,5 @@
   window.addEventListener("scroll",()=>closeMapMenu(),true);
   els.dialog.addEventListener("click",event=>{ if (event.target===els.dialog) els.dialog.close(); });
 
-  refreshStationOptions(); syncSourceControls(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); renderMap(); planJourney();
+  refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); renderMap(); planJourney();
 })();

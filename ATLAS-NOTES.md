@@ -8,12 +8,13 @@ It contains no station or railway marks, so deleting overlay records leaves no
 ghost towns or tracks. Borders remain approximate. Coordinates are digitized
 from the reference at half size and divided by 3.2.
 
-The original calculator's 23 3E/4E connections and 26 stations are the baseline,
+The original calculator's 23 connections (4E map distances) and 26 stations are the baseline,
 not a new comprehensive certification of canon. Twenty-one extra railway towns
 and 35 connections from the reference's railway diagrams are seeded as Custom.
 Canonical towns can also be in this conservative unverified collection.
 New reference route mileage uses the diagram's printed hours multiplied by its
-stated 30 mph. It does not change with the 3E/4E baseline mileage selector.
+stated 30 mph. The 3E mileage option has been removed; all baseline
+distances are 4E.
 The diagram's “Galespyre” is normalized to the map's “Galethspyre”.
 
 Two previously fixed extra links are now Custom: Vedykar–Vulyar and

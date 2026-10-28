@@ -46,8 +46,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .brand-copy span, .eyebrow { display: block; margin: 0; color: #81d8da; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .13em; }
 .brand-copy h1 { margin: 2px 0 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; font-weight: 500; letter-spacing: .02em; }
 .header-actions { margin-left: auto; display: flex; align-items: center; gap: 11px; }
-.source-select { height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 6px 0 13px; border: 1px solid var(--line); border-radius: 6px; color: #9fb0b4; background: rgba(255, 255, 255, .035); font-size: .76rem; }
-.source-select select { min-width: 58px; height: 30px; border: 0; color: #f4f7f2; background: #18333c; border-radius: 4px; padding: 0 7px; font-weight: 800; }
 .network-button { height: 40px; display: flex; align-items: center; gap: 8px; border: 1px solid rgba(99, 213, 215, .24); border-radius: 6px; padding: 0 13px; color: #dcebea; background: rgba(99, 213, 215, .07); font-size: .75rem; font-weight: 800; }
 .network-button:hover, .network-button[aria-expanded="true"] { color: white; border-color: rgba(99, 213, 215, .52); background: rgba(99, 213, 215, .14); }
 .network-button svg { width: 18px; fill: none; stroke: var(--cyan); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
@@ -268,7 +266,6 @@ footer a { color: #79c7cb; }
   .brand-mark { width: 38px; height: 38px; }
   .brand-copy span { display: none; }
   .brand-copy h1 { font-size: 1.1rem; }
-  .source-select > span { display: none; }
   .network-button { width: 40px; padding: 0; justify-content: center; }
   .network-button span { display: none; }
   .workspace { display: block; min-height: auto; }
@@ -285,7 +282,6 @@ footer a { color: #79c7cb; }
 }
 
 @media (max-width: 520px) {
-  .source-select { padding-left: 5px; }
   .map-panel { height: 58vh; min-height: 410px; }
   .map-toolbar { width: calc(100% - 64px); }
   .search-row { grid-template-columns: 68px minmax(0, 1fr); }
