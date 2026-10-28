@@ -45,7 +45,7 @@
             </button>
           </div>
           <datalist id="stations"></datalist>
-          <p id="selectionHint" class="selection-hint"><span></span>Click a station to change the departure</p>
+          <p id="selectionHint" class="selection-hint"><span></span>Click a station to change the departure · Right-click or long-press for map tools</p>
           <p id="routeError" class="map-error" role="alert" hidden></p>
           <section id="networkEditor" class="network-editor" aria-labelledby="networkEditorTitle" hidden>
             <div class="network-editor-header">
@@ -60,7 +60,11 @@
               <summary>Custom collection</summary>
               <p>Reference-map additions and your own edits. “Unverified” does not mean a town is non-canon. Imported railway distances use the map’s travel times × 30 mph.</p>
               <label><input id="showCustom" type="checkbox" checked> Include custom towns and railways</label>
-              <button id="exportNetwork" class="text-button" type="button">Export backup</button>
+              <div class="backup-actions">
+                <button id="exportNetwork" class="text-button" type="button">Export backup</button>
+                <button id="importNetwork" class="text-button" type="button">Import backup</button>
+                <input id="importFile" type="file" accept=".json,application/json" hidden>
+              </div>
             </details>
             <div id="connectionTools" role="tabpanel" aria-labelledby="connectionsTab">
               <p class="network-instruction">Click a rail segment to select it for removal, or choose two stations to create or replace a connection.</p>
@@ -111,20 +115,6 @@
             </defs>
             <rect width="1200" height="760" fill="url(#largeGrid)"/>
             <g id="mapViewport">
-              <g class="landmass" aria-hidden="true" hidden>
-                <path class="continent" d="M106 156 171 94 275 69 382 77 462 54 583 74 688 50 824 73 940 64 1057 105 1090 172 1065 239 1098 310 1056 397 1000 419 958 487 871 510 822 583 721 593 677 685 579 724 473 705 407 650 323 635 262 574 181 542 130 465 147 375 103 294 128 228Z"/>
-                <path class="nation breland" d="M126 383 246 326 392 325 510 374 592 438 650 557 612 687 471 704 408 648 322 634 252 577 178 542 130 463Z"/>
-                <path class="nation aundair" d="M166 112 284 71 468 72 548 131 520 246 438 329 286 322 193 265 136 197Z"/>
-                <path class="nation thrane" d="M452 191 572 153 666 234 647 362 560 429 469 372 405 303Z"/>
-                <path class="nation karrnath" d="M553 80 705 51 849 72 954 66 1065 115 1088 190 1028 280 903 315 771 303 672 248 569 183Z"/>
-                <path class="nation talenta" d="M690 261 819 269 971 313 1048 391 983 454 872 504 742 489 650 414Z"/>
-                <path class="nation mournland" d="M570 348 684 301 777 332 832 427 806 554 716 597 625 564 578 480Z"/>
-                <path class="nation zilargo" d="M423 590 513 569 640 596 677 680 584 727 476 701 407 649Z"/>
-              </g>
-              <g class="nation-labels" aria-hidden="true" hidden>
-                <text x="310" y="203">AUNDAIR</text><text x="522" y="284">THRANE</text><text x="801" y="168">KARRNATH</text>
-                <text x="345" y="509">BRELAND</text><text x="822" y="402">TALENTA PLAINS</text><text x="687" y="467">THE MOURNLAND</text><text x="517" y="665">ZILARGO</text>
-              </g>
               <image href="./atlas.svg" width="1200" height="760" pointer-events="none"/>
               <g id="railLines" class="rail-lines"></g>
               <g id="stationLayer" class="station-layer"></g>
@@ -182,7 +172,7 @@
       </aside>
     </main>
 
-    <footer><span>Interactive schematic map. Geography is simplified for route planning.</span><a href="https://github.com/grJDh/eberron-trains" target="_blank" rel="noreferrer">Original project</a></footer>
+    <footer><span>Interactive atlas. Geography is simplified for route planning.</span><a href="https://github.com/grJDh/eberron-trains" target="_blank" rel="noreferrer">Original project</a></footer>
   </div>
 
   <dialog id="settingsDialog" class="settings-dialog">

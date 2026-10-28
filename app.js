@@ -52,6 +52,10 @@
   BASE_STATIONS.Thaliost.l=[-7,-7,"end"];
   BASE_STATIONS["First Tower"].l=[7,10,"start"];
   const DEFAULTS = {source:"4e",speed:30,layover:1,fares:[],connections:[],disabledConnections:[],customStations:[]};
+  // localStorage can be unavailable (private mode, blocked site data) or full; never let that break the app.
+  const STORAGE_KEY="lightningRailSettings";
+  function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
+  function storageSet(key,value) { try { localStorage.setItem(key,value); return true; } catch { return false; } }
 
   const $ = id => document.getElementById(id);
   const els = {
@@ -82,67 +86,93 @@
   let suppressMapClick = false;
   let editingTown = null;
 
-  function migrateAtlas(saved) {
-    if (saved.atlasVersion === 1) return saved;
-    const old=structuredClone(saved);
-    const additions=window.RAIL_ATLAS.towns.map(([name,x,y,region])=>({name,x:x/3.2,y:y/3.2,region,origin:"Reference map / unverified"}));
-    const custom=(saved.customStations || []).map(station=>{
-      // Keep the old coordinates in a backup; approximate relocation follows nearby built-in stations.
-      let weight=0, dx=0, dy=0;
-      Object.entries(OLD_STATIONS).forEach(([name,p])=>{
-        const w=1/(Math.pow(p.x-station.x,2)+Math.pow(p.y-station.y,2)+25);
-        weight+=w; dx+=(BASE_STATIONS[name].x-p.x)*w; dy+=(BASE_STATIONS[name].y-p.y)*w;
+
+  // Pure migration: returns a migrated copy plus the backups that should be written before saving it.
+  function migrateSaved(input) {
+    let saved=structuredClone(input);
+    const backups=[];
+    if (saved.atlasVersion !== 1) {
+      backups.push(["lightningRailSettingsBeforeAtlas",structuredClone(input)]);
+      const additions=window.RAIL_ATLAS.towns.map(([name,x,y,region])=>({name,x:x/3.2,y:y/3.2,region,origin:"Reference map / unverified"}));
+      const custom=(Array.isArray(saved.customStations) ? saved.customStations : []).map(station=>{
+        // Approximate relocation follows nearby built-in stations; originals stay in the backup.
+        let weight=0, dx=0, dy=0;
+        Object.entries(OLD_STATIONS).forEach(([name,p])=>{
+          const w=1/(Math.pow(p.x-station.x,2)+Math.pow(p.y-station.y,2)+25);
+          weight+=w; dx+=(BASE_STATIONS[name].x-p.x)*w; dy+=(BASE_STATIONS[name].y-p.y)*w;
+        });
+        return {...station,x:Math.max(0,Math.min(1200,station.x+dx/weight)),y:Math.max(0,Math.min(760,station.y+dy/weight)),origin:station.origin || "Your town · relocated"};
       });
-      return {...station,x:Math.max(0,Math.min(1200,station.x+dx/weight)),y:Math.max(0,Math.min(760,station.y+dy/weight)),origin:station.origin || "Your town · relocated"};
-    });
-    const names=new Set(custom.map(s=>s.name.toLowerCase()));
-    saved.customStations=[...custom,...additions.filter(s=>!names.has(s.name.toLowerCase()))];
-    const byName=name=>saved.customStations.find(s=>s.name.toLowerCase()===name.toLowerCase())?.name || name;
-    const connections=new Map((saved.connections || []).map(c=>[edgeKey(c[0],c[1]),c]));
-    const removed=new Set(saved.disabledConnections || []);
-    [...FIXED_LINKS,...window.RAIL_ATLAS.routes.map(([a,b,h])=>[a,b,h*30])].forEach(([a,b,d])=>{
-      a=byName(a); b=byName(b); const key=edgeKey(a,b);
-      if (!connections.has(key) && !removed.has(key)) connections.set(key,[a,b,d]);
-    });
-    saved.connections=[...connections.values()];
-    saved.atlasVersion=1; saved.showCustom=true;
-    // Save once so removing an imported record does not cause it to reappear on reload.
-    if (!localStorage.getItem("lightningRailSettingsBeforeAtlas")) localStorage.setItem("lightningRailSettingsBeforeAtlas",JSON.stringify(old));
-    localStorage.setItem("lightningRailSettings",JSON.stringify(saved));
-    return saved;
+      const names=new Set(custom.map(s=>String(s.name).toLowerCase()));
+      saved.customStations=[...custom,...additions.filter(s=>!names.has(s.name.toLowerCase()))];
+      const byName=name=>saved.customStations.find(s=>String(s.name).toLowerCase()===name.toLowerCase())?.name || name;
+      const connections=new Map((Array.isArray(saved.connections) ? saved.connections : []).filter(Array.isArray).map(c=>[edgeKey(c[0],c[1]),c]));
+      const removed=new Set(Array.isArray(saved.disabledConnections) ? saved.disabledConnections : []);
+      [...FIXED_LINKS,...window.RAIL_ATLAS.routes.map(([a,b,h])=>[a,b,h*30])].forEach(([a,b,d])=>{
+        a=byName(a); b=byName(b); const key=edgeKey(a,b);
+        if (!connections.has(key) && !removed.has(key)) connections.set(key,[a,b,d]);
+      });
+      saved.connections=[...connections.values()];
+      saved.atlasVersion=1; saved.showCustom=true;
+    }
+    if (!saved.bridgeCorrection) {
+      backups.push(["lightningRailSettingsBeforeBridgeCorrection",structuredClone(saved)]);
+      saved.connections=(saved.connections || []).filter(c=>edgeKey(c[0],c[1])!==edgeKey("Thaliost","Rekkenmark"));
+      saved.bridgeCorrection=true;
+    }
+    return {saved,backups};
   }
+
+  // Validates any saved/imported object into a clean settings object.
+  function normalizeSettings(saved) {
+    const customStations=Array.isArray(saved.customStations) ? saved.customStations.filter(station => {
+      const name=String(station?.name || "").trim(), x=Number(station?.x), y=Number(station?.y);
+      return name && !name.includes("|") && !BASE_STATIONS[name] && Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1200 && y >= 0 && y <= 760;
+    }).map(station => ({name:String(station.name).trim(),region:String(station.region || "").trim(),x:Number(station.x),y:Number(station.y),origin:String(station.origin || "Your town")})) : [];
+    const knownStation=name => !!BASE_STATIONS[name] || customStations.some(station => station.name === name);
+    const savedConnections=Array.isArray(saved.connections) ? saved.connections.filter(connection =>
+      Array.isArray(connection) && connection[0] !== connection[1] && knownStation(connection[0]) && knownStation(connection[1]) && Number(connection[2]) > 0 && Number.isFinite(Number(connection[2]))
+    ) : [];
+    const fares=Array.isArray(saved.fares) ? saved.fares.filter(fare => fare && typeof fare === "object").map(fare => ({
+      name:String(fare.name || ""),tier:String(fare.tier || ""),price:Math.max(0,Number(fare.price) || 0),basis:["mile","day","hour"].includes(fare.basis) ? fare.basis : "mile"
+    })) : [];
+    return {
+      source:saved.source === "3e" ? "3e" : "4e",
+      speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
+      layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
+      fares,
+      connections:savedConnections.map(([from,to,miles]) => [from,to,Number(miles)]),
+      disabledConnections:Array.isArray(saved.disabledConnections) ? [...new Set(saved.disabledConnections.filter(key => typeof key === "string" && isBuiltInEdge(key)))] : [],
+      customStations,atlasVersion:1,bridgeCorrection:true,showCustom:saved.showCustom !== false
+    };
+  }
+
+  // Fresh install: defaults plus the seeded reference-map towns and railways.
+  function seededDefaults() { return normalizeSettings(migrateSaved(structuredClone(DEFAULTS)).saved); }
 
   function loadSettings() {
-    try {
-      const raw = JSON.parse(localStorage.getItem("lightningRailSettings"));
-      const saved=migrateAtlas(raw && typeof raw === "object" ? raw : structuredClone(DEFAULTS));
-      if (!saved.bridgeCorrection) {
-        localStorage.setItem("lightningRailSettingsBeforeBridgeCorrection",JSON.stringify(saved));
-        saved.connections=(saved.connections || []).filter(c=>edgeKey(c[0],c[1])!==edgeKey("Thaliost","Rekkenmark"));
-        saved.bridgeCorrection=true;
-        localStorage.setItem("lightningRailSettings",JSON.stringify(saved));
+    const rawText=storageGet(STORAGE_KEY);
+    let raw=null;
+    if (rawText) {
+      try { raw=JSON.parse(rawText); } catch { raw=null; }
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        // Unreadable data: keep a copy instead of silently overwriting it, then start from seeded defaults.
+        storageSet("lightningRailSettingsCorrupt",rawText);
+        raw=null;
       }
-      const customStations=Array.isArray(saved.customStations) ? saved.customStations.filter(station => {
-        const name=String(station?.name || "").trim(), x=Number(station?.x), y=Number(station?.y);
-        return name && !BASE_STATIONS[name] && Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1200 && y >= 0 && y <= 760;
-      }).map(station => ({name:String(station.name).trim(),region:String(station.region || "").trim(),x:Number(station.x),y:Number(station.y),origin:String(station.origin || "Your town")})) : [];
-      const knownStation=name => !!BASE_STATIONS[name] || customStations.some(station => station.name === name);
-      const savedConnections=Array.isArray(saved.connections) ? saved.connections.filter(connection => {
-        if (!Array.isArray(connection) || !knownStation(connection[0]) || !knownStation(connection[1]) || !(Number(connection[2]) > 0)) return false;
-        return true;
-      }) : [];
-      return {
-        source:saved.source === "3e" ? "3e" : "4e",
-        speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
-        layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
-        fares:Array.isArray(saved.fares) ? saved.fares : [],
-        connections:savedConnections.map(([from,to,miles]) => [from,to,Number(miles)]),
-        disabledConnections:Array.isArray(saved.disabledConnections) ? [...new Set(saved.disabledConnections.filter(key => isBuiltInEdge(key)))] : [],
-        customStations,atlasVersion:1,bridgeCorrection:true,showCustom:saved.showCustom !== false
-      };
-    } catch { return {...DEFAULTS,fares:[],connections:[],disabledConnections:[],customStations:[]}; }
+    }
+    try {
+      const {saved,backups}=migrateSaved(raw || structuredClone(DEFAULTS));
+      if (raw) backups.forEach(([key,value]) => { if (!storageGet(key)) storageSet(key,JSON.stringify(value)); });
+      const result=normalizeSettings(saved);
+      // Save once so removing an imported record does not cause it to reappear on reload.
+      storageSet(STORAGE_KEY,JSON.stringify(result));
+      return result;
+    } catch {
+      if (rawText) storageSet("lightningRailSettingsCorrupt",rawText);
+      return seededDefaults();
+    }
   }
-
   function getBuiltInRails() { return settings.source === "3e" ? RAILS_3E : RAILS_4E; }
   function isBuiltInEdge(key) { return [...RAILS_4E,...RAILS_3E].some(connection => edgeKey(connection[0],connection[1]) === key); }
   function getRails() {
@@ -170,9 +200,11 @@
     return graph;
   }
 
+  // Fastest route: each leg costs miles / speed, plus a layover whenever the train passes through a stop.
   function shortestPath(start,end) {
     const graph = makeGraph();
     if (!graph[start] || !graph[end]) return null;
+    const speed=settings.speed > 0 ? settings.speed : DEFAULTS.speed, layover=settings.layover >= 0 ? settings.layover : 0;
     const distance = Object.fromEntries(Object.keys(graph).map(node => [node,Infinity]));
     const previous = {};
     const unvisited = new Set(Object.keys(graph));
@@ -184,7 +216,7 @@
       unvisited.delete(current);
       if (current === end) break;
       graph[current].forEach(edge => {
-        const candidate = distance[current] + edge.distance;
+        const candidate = distance[current] + edge.distance/speed + (current === start ? 0 : layover);
         if (candidate < distance[edge.name]) { distance[edge.name] = candidate; previous[edge.name] = current; }
       });
     }
@@ -195,7 +227,7 @@
       const to = path[index+1];
       return {from,to,distance:graph[from].find(edge => edge.name === to).distance};
     });
-    return {path,segments,distance:distance[end]};
+    return {path,segments,distance:segments.reduce((sum,segment) => sum+segment.distance,0),hours:distance[end]};
   }
 
   function normalizedStation(value) {
@@ -263,7 +295,7 @@
     activeField = field;
     els.fromMode.classList.toggle("active",field === "from");
     els.toMode.classList.toggle("active",field === "to");
-    els.hint.innerHTML = `<span></span>Click a station for ${field === "from" ? "departure" : "destination"} · Right-click for map tools`;
+    els.hint.innerHTML = `<span></span>Click a station for ${field === "from" ? "departure" : "destination"} · Right-click or long-press for map tools`;
     renderMap();
   }
 
@@ -300,8 +332,6 @@
     if (start === end) return showError("Choose two different stations.");
     const journey=shortestPath(start,end);
     if (!journey) return showError(`No active lightning rail route connects ${start} and ${end}.`);
-    const stops=Math.max(0,journey.path.length-2);
-    journey.hours=journey.distance/settings.speed+stops*settings.layover;
     currentJourney={...journey,start,end};
     renderJourney(); renderMap(); fitRoute();
   }
@@ -464,9 +494,11 @@
   }
   function positionTooltip(event) { els.tooltip.style.left=`${event.clientX}px`; els.tooltip.style.top=`${event.clientY}px`; }
   function hideTooltip() { els.tooltip.hidden=true; }
-  function toast(message) { els.toast.textContent=message; els.toast.classList.add("show"); clearTimeout(toast.timer); toast.timer=setTimeout(()=>els.toast.classList.remove("show"),1800); }
+  function toast(message) { els.toast.textContent=message; els.toast.classList.add("show"); clearTimeout(toast.timer); toast.timer=setTimeout(()=>els.toast.classList.remove("show"),Math.max(1800,message.length*55)); }
 
-  function persistSettings() { localStorage.setItem("lightningRailSettings",JSON.stringify(settings)); }
+  function persistSettings() {
+    if (!storageSet(STORAGE_KEY,JSON.stringify(settings))) toast("Browser storage is unavailable: changes will be lost on reload. Use Export backup.");
+  }
   function setNetworkActiveField(field) {
     networkActiveField=field;
     els.networkFromLabel.classList.toggle("active",field === "from");
@@ -685,10 +717,28 @@
     const url=URL.createObjectURL(new Blob([JSON.stringify(settings,null,2)],{type:"application/json"}));
     const a=document.createElement("a"); a.href=url; a.download="khorvaire-network.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
   });
+  $("importNetwork").addEventListener("click",()=>$("importFile").click());
+  $("importFile").addEventListener("change",async event=>{
+    const file=event.target.files[0]; event.target.value="";
+    if (!file) return;
+    let imported;
+    try {
+      const data=JSON.parse(await file.text());
+      if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("not an object");
+      imported=normalizeSettings(migrateSaved(data).saved);
+    } catch { return toast("This file is not a valid network backup."); }
+    const summary=`${imported.customStations.length} custom towns, ${imported.connections.length} custom connections, ${imported.disabledConnections.length} removed built-in connections, ${imported.fares.length} custom fares`;
+    if (!window.confirm(`Replace your current network and settings with this backup?\n\n${summary}`)) return;
+    storageSet("lightningRailSettingsBeforeImport",JSON.stringify(settings));
+    settings=imported; persistSettings();
+    resetTownEditor(); $("showCustom").checked=settings.showCustom !== false; syncSourceControls();
+    refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
+    toast("Backup imported");
+  });
   $("settingsButton").addEventListener("click",openSettings); $("addFare").addEventListener("click",()=>addFareRow()); $("saveSettings").addEventListener("click",saveSettings);
   $("resetSettings").addEventListener("click",()=>{
     if (!window.confirm("Reset fares, custom towns, and railways to atlas defaults?")) return;
-    settings=migrateAtlas(structuredClone(DEFAULTS)); resetTownEditor(); $("showCustom").checked=true; syncSourceControls(); els.speed.value=settings.speed; els.layover.value=settings.layover; els.fareRows.replaceChildren(); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas defaults restored");
+    settings=seededDefaults(); persistSettings(); resetTownEditor(); $("showCustom").checked=true; syncSourceControls(); els.speed.value=settings.speed; els.layover.value=settings.layover; els.fareRows.replaceChildren(); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas defaults restored");
   });
   $("copyButton").addEventListener("click",async()=>{
     if (!currentJourney) return;
@@ -703,7 +753,28 @@
   els.svg.addEventListener("pointercancel",()=>{ drag=null; els.svg.classList.remove("dragging"); });
   els.svg.addEventListener("click",selectTownPosition);
   els.svg.setAttribute("tabindex","0");
-  els.svg.addEventListener("contextmenu",openMapMenu);
+  // Touch devices: long-press opens the same map menu (iOS never fires contextmenu; Android may, so avoid opening twice).
+  let longPress=null, lastMenuOpen=0, suppressClickUntil=0;
+  const cancelLongPress=()=>{ if (longPress) { clearTimeout(longPress.timer); longPress=null; } };
+  els.svg.addEventListener("pointerdown",event=>{
+    if (event.pointerType !== "touch" || !event.isPrimary) return cancelLongPress();
+    cancelLongPress();
+    const {clientX,clientY}=event;
+    longPress={clientX,clientY,timer:setTimeout(()=>{
+      longPress=null;
+      if (drag) { drag=null; els.svg.classList.remove("dragging"); }
+      lastMenuOpen=Date.now(); suppressClickUntil=Date.now()+700;
+      openMapMenu({clientX,clientY,preventDefault(){}});
+    },550)};
+  },true);
+  els.svg.addEventListener("pointermove",event=>{ if (longPress && Math.hypot(event.clientX-longPress.clientX,event.clientY-longPress.clientY)>8) cancelLongPress(); },true);
+  ["pointerup","pointercancel"].forEach(type=>els.svg.addEventListener(type,cancelLongPress,true));
+  els.svg.addEventListener("click",event=>{ if (Date.now()<suppressClickUntil) { event.stopPropagation(); event.preventDefault(); } },true);
+  els.svg.addEventListener("contextmenu",event=>{
+    cancelLongPress();
+    if (Date.now()-lastMenuOpen<700) return event.preventDefault();
+    lastMenuOpen=Date.now(); openMapMenu(event);
+  });
   document.addEventListener("pointerdown",event=>{ if (!event.target.closest("#mapContextMenu")) closeMapMenu(); });
   document.addEventListener("keydown",event=>{
     const menu=$("mapContextMenu");
