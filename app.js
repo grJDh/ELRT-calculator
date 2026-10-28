@@ -1,427 +1,725 @@
-/* Lightning Rail Planner - standalone, no dependencies.
-   Source mileages: https://github.com/grJDh/eberron-trains (read-only reference).
-   Custom Tellyn links: published Sharn -> Flamekeep sample itinerary.
-*/
 (() => {
-  'use strict';
-  const STORAGE = 'house-orien-lightning-rail-planner-v1';
-  const original4E = [
-    ['Krona Peak','Irontown',104], ['Irontown','Vulyar',315],
-    ['Korth','Rekkenmark',112], ['Korth','Atur',195], ['Atur','Vedykar',148],
-    ['Vedykar','Fort Zombie',142], ['Sharn','First Tower',44],
-    ['First Tower','Wroat',250], ['Wroat','Hatheril',478],
-    ['Hatheril','Starilaskur',223], ['Hatheril','Sword Keep',106],
-    ['Wroat','Starilaskur',617], ['Starilaskur','Sterngate',269],
-    ['Starilaskur','Vathirond',198], ['Vathirond','Aruldusk',142],
-    ['Aruldusk','Sigilstar',99], ['Sigilstar','Flamekeep',194],
-    ['Sword Keep','Marketplace',96], ['Marketplace','Passage',255],
-    ['Passage','Fairhaven',227], ['Fairhaven','Thaliost',361],
-    ['Sterngate','Zolanberg',214], ['Zolanberg','Korranberg',195]
+  "use strict";
+
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const RAILS_4E = [
+    ["Krona Peak","Irontown",104],["Irontown","Vulyar",315],["Korth","Rekkenmark",112],["Korth","Atur",195],
+    ["Atur","Vedykar",148],["Vedykar","Fort Zombie",142],["Sharn","First Tower",44],["First Tower","Wroat",250],
+    ["Wroat","Hatheril",478],["Hatheril","Starilaskur",223],["Hatheril","Sword Keep",106],["Wroat","Starilaskur",617],
+    ["Starilaskur","Sterngate",269],["Starilaskur","Vathirond",198],["Vathirond","Aruldusk",142],["Aruldusk","Sigilstar",99],
+    ["Sigilstar","Flamekeep",194],["Sword Keep","Marketplace",96],["Marketplace","Passage",255],["Passage","Fairhaven",227],
+    ["Fairhaven","Thaliost",361],["Sterngate","Zolanberg",214],["Zolanberg","Korranberg",195]
   ];
-  const original3E = [
-    ['Krona Peak','Irontown',142], ['Irontown','Vulyar',456],
-    ['Korth','Rekkenmark',141], ['Korth','Atur',332], ['Atur','Vedykar',227],
-    ['Vedykar','Fort Zombie',239], ['Sharn','First Tower',56],
-    ['First Tower','Wroat',417], ['Wroat','Hatheril',717],
-    ['Hatheril','Starilaskur',372], ['Hatheril','Sword Keep',150],
-    ['Wroat','Starilaskur',939], ['Starilaskur','Sterngate',369],
-    ['Starilaskur','Vathirond',287], ['Vathirond','Aruldusk',262],
-    ['Aruldusk','Sigilstar',166], ['Sigilstar','Flamekeep',300],
-    ['Sword Keep','Marketplace',97], ['Marketplace','Passage',369],
-    ['Passage','Fairhaven',348], ['Fairhaven','Thaliost',617],
-    ['Sterngate','Zolanberg',386], ['Zolanberg','Korranberg',300]
+  const RAILS_3E = [
+    ["Krona Peak","Irontown",142],["Irontown","Vulyar",456],["Korth","Rekkenmark",141],["Korth","Atur",332],
+    ["Atur","Vedykar",227],["Vedykar","Fort Zombie",239],["Sharn","First Tower",56],["First Tower","Wroat",417],
+    ["Wroat","Hatheril",717],["Hatheril","Starilaskur",372],["Hatheril","Sword Keep",150],["Wroat","Starilaskur",939],
+    ["Starilaskur","Sterngate",369],["Starilaskur","Vathirond",287],["Vathirond","Aruldusk",262],["Aruldusk","Sigilstar",166],
+    ["Sigilstar","Flamekeep",300],["Sword Keep","Marketplace",97],["Marketplace","Passage",369],["Passage","Fairhaven",348],
+    ["Fairhaven","Thaliost",617],["Sterngate","Zolanberg",386],["Zolanberg","Korranberg",300]
   ];
-  // Coordinates are schematic (% of the canvas), not survey/GIS coordinates.
-  const positions = {
-    'Sharn':[11,83], 'First Tower':[17,78], 'Wroat':[27,73],
-    'Hatheril':[43,67], 'Starilaskur':[58,67], 'Sword Keep':[45,55],
-    'Marketplace':[52,49], 'Tellyn':[66,43], 'Sigilstar':[80,38],
-    'Flamekeep':[84,31], 'Vathirond':[72,60], 'Aruldusk':[77,49],
-    'Sterngate':[60,84], 'Zolanberg':[73,86], 'Korranberg':[85,85],
-    'Passage':[40,38], 'Fairhaven':[33,24], 'Thaliost':[53,17],
-    'Rekkenmark':[65,19], 'Korth':[72,26], 'Atur':[82,33],
-    'Vedykar':[89,43], 'Fort Zombie':[95,54], 'Krona Peak':[88,9],
-    'Irontown':[83,16], 'Vulyar':[87,23], 'Gatherhold':[81,60],
-    'Arcanix':[38,31], 'Ardev':[22,64], 'Athandra':[69,54],
-    'Avaroth':[68,22], 'Bastion':[18,89], 'Danthaven':[49,41],
-    'Daskaran':[56,24], 'Eiben':[42,30], 'Galethspyre':[78,34],
-    'Karrlakton':[85,37], 'Latheer':[77,23], 'New Cyre':[66,73],
-    'Nowhere':[81,29], 'Sharavacion':[92,48], 'Sharpton':[30,66],
-    'Soldit':[69,91], 'Teryk':[70,69], 'Threshold':[85,58],
-    'Vom':[85,66], 'Xandrar':[36,35]
+  const FIXED_LINKS = [["Vedykar","Vulyar",147],["Vulyar","Gatherhold",302]];
+  const BROKEN_LINKS = [["Thaliost","Rekkenmark"],["Fort Zombie","Vathirond"],["Vathirond","Sterngate"]];
+
+  const BASE_STATIONS = {
+    "Sharn": {x:220,y:690,l:[-12,25,"end"]}, "First Tower": {x:210,y:615,l:[-12,5,"end"]},
+    "Wroat": {x:280,y:515,l:[-12,5,"end"]}, "Hatheril": {x:390,y:470,l:[-12,-12,"end"]},
+    "Sword Keep": {x:375,y:395,l:[-12,5,"end"]}, "Marketplace": {x:330,y:330,l:[-12,5,"end"]},
+    "Passage": {x:345,y:255,l:[-12,5,"end"]}, "Fairhaven": {x:375,y:170,l:[-12,5,"end"]},
+    "Thaliost": {x:500,y:120,l:[0,-15,"middle"]}, "Rekkenmark": {x:585,y:135,l:[0,23,"middle"]},
+    "Korth": {x:665,y:115,l:[0,-15,"middle"]}, "Atur": {x:745,y:150,l:[10,-10,"start"]},
+    "Vedykar": {x:745,y:220,l:[-12,5,"end"]}, "Fort Zombie": {x:655,y:245,l:[-12,20,"end"]},
+    "Vulyar": {x:845,y:225,l:[10,-10,"start"]}, "Irontown": {x:930,y:185,l:[12,5,"start"]},
+    "Krona Peak": {x:965,y:110,l:[10,-10,"start"]}, "Gatherhold": {x:845,y:320,l:[10,5,"start"]},
+    "Flamekeep": {x:530,y:255,l:[10,-10,"start"]}, "Sigilstar": {x:530,y:330,l:[10,5,"start"]},
+    "Aruldusk": {x:555,y:405,l:[10,5,"start"]}, "Vathirond": {x:610,y:455,l:[10,-10,"start"]},
+    "Starilaskur": {x:485,y:480,l:[-12,20,"end"]}, "Sterngate": {x:500,y:570,l:[-12,5,"end"]},
+    "Zolanberg": {x:550,y:640,l:[-12,5,"end"]}, "Korranberg": {x:610,y:700,l:[10,5,"start"]}
   };
-  const defaultCustom = [
-    {id:'original-custom-thaliost',a:'Thaliost',b:'Rekkenmark',miles:27,enabled:true,origin:'Original custom network'},
-    {id:'original-custom-vedykar',a:'Vedykar',b:'Vulyar',miles:147,enabled:true,origin:'Original custom network'},
-    {id:'original-custom-gatherhold',a:'Vulyar',b:'Gatherhold',miles:302,enabled:true,origin:'Original custom network'},
-    {id:'planner-tellyn-1',a:'Marketplace',b:'Tellyn',miles:150,enabled:true,origin:'Recovered journey example'},
-    {id:'planner-tellyn-2',a:'Tellyn',b:'Sigilstar',miles:150,enabled:true,origin:'Recovered journey example'}
+
+  const BASE_FARES = [
+    {source:"erlw",sourceName:"Rising from the Last War (5E)",tier:"Any seat",price:.5,basis:"mile"},
+    {source:"wgte",sourceName:"Wayfinder's Guide to Eberron (5E)",tier:"Standard",price:1,basis:"day"},
+    {source:"wgte",sourceName:"Wayfinder's Guide to Eberron (5E)",tier:"Luxury",price:4,basis:"day"},
+    {source:"ecg",sourceName:"Eberron Campaign Guide (4E)",tier:"Steerage",price:.03,basis:"mile"},
+    {source:"ecg",sourceName:"Eberron Campaign Guide (4E)",tier:"Standard",price:.2,basis:"mile"},
+    {source:"ecg",sourceName:"Eberron Campaign Guide (4E)",tier:"First class",price:.5,basis:"mile"}
   ];
-  const builtinFares = [
-    {name:'Any seat',source:'Rising from the Last War (5E)',group:'5E',rate:.5,method:'mile'},
-    {name:'Standard',source:"Wayfinder’s Guide to Eberron (5E)",group:'5E',rate:1,method:'day'},
-    {name:'Luxury',source:"Wayfinder’s Guide to Eberron (5E)",group:'5E',rate:4,method:'day'},
-    {name:'Steerage',source:'Eberron Campaign Guide (4E)',group:'4E',rate:.03,method:'mile'},
-    {name:'Standard',source:'Eberron Campaign Guide (4E)',group:'4E',rate:.2,method:'mile'},
-    {name:'First class',source:'Eberron Campaign Guide (4E)',group:'4E',rate:.5,method:'mile'}
-  ];
-  const orienFares = [
-    {name:'Steerage',source:'House Orien campaign classes',group:'Orien',rate:.005,method:'mile'},
-    {name:'Economy seat',source:'House Orien campaign classes',group:'Orien',rate:.01,method:'mile'},
-    {name:'Economy sleeper',source:'House Orien campaign classes',group:'Orien',rate:.02,method:'mile'},
-    {name:'Business sleeper',source:'House Orien campaign classes',group:'Orien',rate:.05,method:'mile'},
-    {name:'First class',source:'House Orien campaign classes',group:'Orien',rate:.1,method:'mile'}
-  ];
-  const initial = () => ({
-    from:'Sharn',to:'Flamekeep',edition:'4E',speed:30,layover:1,fareFilter:'All',
-    customConnections:defaultCustom.map(c=>({...c})),customStations:[],customFares:[]
+  const OLD_STATIONS=structuredClone(BASE_STATIONS);
+  Object.entries(window.RAIL_ATLAS.positions).forEach(([name,[x,y]])=>{
+    BASE_STATIONS[name]={x:x/3.2,y:y/3.2,l:[7,-7,"start"]};
   });
-  function load() {
+  BASE_STATIONS.Thaliost.l=[-7,-7,"end"];
+  BASE_STATIONS["First Tower"].l=[7,10,"start"];
+  const DEFAULTS = {source:"4e",speed:30,layover:1,fares:[],connections:[],disabledConnections:[],customStations:[]};
+
+  const $ = id => document.getElementById(id);
+  const els = {
+    svg:$("railMap"),viewport:$("mapViewport"),stage:$("mapStage"),railLines:$("railLines"),stationLayer:$("stationLayer"),
+    from:$("fromStation"),to:$("toStation"),fromMode:$("fromModeButton"),toMode:$("toModeButton"),hint:$("selectionHint"),
+    error:$("routeError"),stations:$("stations"),routeList:$("routeList"),fareList:$("fareList"),fareFilter:$("fareFilter"),
+    headerSource:$("headerDistanceSource"),dialog:$("settingsDialog"),source:$("distanceSource"),speed:$("speedInput"),
+    layover:$("layoverInput"),fareRows:$("fareRows"),tooltip:$("stationTooltip"),toast:$("toast"),
+    networkButton:$("networkButton"),networkEditor:$("networkEditor"),networkFrom:$("networkFrom"),networkTo:$("networkTo"),
+    networkFromLabel:$("networkFromLabel"),networkToLabel:$("networkToLabel"),networkDistance:$("networkDistance"),
+    networkError:$("networkError"),customRouteList:$("customRouteList"),customRouteCount:$("customRouteCount"),
+    removeNetworkRoute:$("removeNetworkRoute"),removedRouteList:$("removedRouteList"),removedRouteCount:$("removedRouteCount"),
+    connectionsTab:$("connectionsTab"),townsTab:$("townsTab"),connectionTools:$("connectionTools"),townTools:$("townTools"),
+    townName:$("townName"),townRegion:$("townRegion"),townPlacementStatus:$("townPlacementStatus"),townError:$("townError"),
+    placeTownButton:$("placeTownButton"),saveTownButton:$("saveTownButton"),customTownList:$("customTownList"),customTownCount:$("customTownCount")
+  };
+
+  let settings = loadSettings();
+  let activeField = "from";
+  let currentJourney = null;
+  let view = {scale:1,x:0,y:0};
+  let drag = null;
+  let networkEditing = false;
+  let networkActiveField = "from";
+  let networkPanel = "connections";
+  let townPlacementArmed = false;
+  let draftTownPoint = null;
+  let suppressMapClick = false;
+  let editingTown = null;
+
+  function migrateAtlas(saved) {
+    if (saved.atlasVersion === 1) return saved;
+    const old=structuredClone(saved);
+    const additions=window.RAIL_ATLAS.towns.map(([name,x,y,region])=>({name,x:x/3.2,y:y/3.2,region,origin:"Reference map / unverified"}));
+    const custom=(saved.customStations || []).map(station=>{
+      // Keep the old coordinates in a backup; approximate relocation follows nearby built-in stations.
+      let weight=0, dx=0, dy=0;
+      Object.entries(OLD_STATIONS).forEach(([name,p])=>{
+        const w=1/(Math.pow(p.x-station.x,2)+Math.pow(p.y-station.y,2)+25);
+        weight+=w; dx+=(BASE_STATIONS[name].x-p.x)*w; dy+=(BASE_STATIONS[name].y-p.y)*w;
+      });
+      return {...station,x:Math.max(0,Math.min(1200,station.x+dx/weight)),y:Math.max(0,Math.min(760,station.y+dy/weight)),origin:station.origin || "Your town · relocated"};
+    });
+    const names=new Set(custom.map(s=>s.name.toLowerCase()));
+    saved.customStations=[...custom,...additions.filter(s=>!names.has(s.name.toLowerCase()))];
+    const byName=name=>saved.customStations.find(s=>s.name.toLowerCase()===name.toLowerCase())?.name || name;
+    const connections=new Map((saved.connections || []).map(c=>[edgeKey(c[0],c[1]),c]));
+    const removed=new Set(saved.disabledConnections || []);
+    [...FIXED_LINKS,...window.RAIL_ATLAS.routes.map(([a,b,h])=>[a,b,h*30])].forEach(([a,b,d])=>{
+      a=byName(a); b=byName(b); const key=edgeKey(a,b);
+      if (!connections.has(key) && !removed.has(key)) connections.set(key,[a,b,d]);
+    });
+    saved.connections=[...connections.values()];
+    saved.atlasVersion=1; saved.showCustom=true;
+    // Save once so removing an imported record does not cause it to reappear on reload.
+    if (!localStorage.getItem("lightningRailSettingsBeforeAtlas")) localStorage.setItem("lightningRailSettingsBeforeAtlas",JSON.stringify(old));
+    localStorage.setItem("lightningRailSettings",JSON.stringify(saved));
+    return saved;
+  }
+
+  function loadSettings() {
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE) || 'null');
-      if (saved && typeof saved === 'object' && Array.isArray(saved.customConnections) && Array.isArray(saved.customStations) && Array.isArray(saved.customFares)) {
-        return {...initial(),...saved,speed:Number(saved.speed)||30,layover:Math.max(0,Number(saved.layover)||0)};
+      const raw = JSON.parse(localStorage.getItem("lightningRailSettings"));
+      const saved=migrateAtlas(raw && typeof raw === "object" ? raw : structuredClone(DEFAULTS));
+      if (!saved.bridgeCorrection) {
+        localStorage.setItem("lightningRailSettingsBeforeBridgeCorrection",JSON.stringify(saved));
+        saved.connections=(saved.connections || []).filter(c=>edgeKey(c[0],c[1])!==edgeKey("Thaliost","Rekkenmark"));
+        saved.bridgeCorrection=true;
+        localStorage.setItem("lightningRailSettings",JSON.stringify(saved));
       }
-    } catch(_) { /* use defaults */ }
-    return initial();
+      const customStations=Array.isArray(saved.customStations) ? saved.customStations.filter(station => {
+        const name=String(station?.name || "").trim(), x=Number(station?.x), y=Number(station?.y);
+        return name && !BASE_STATIONS[name] && Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 1200 && y >= 0 && y <= 760;
+      }).map(station => ({name:String(station.name).trim(),region:String(station.region || "").trim(),x:Number(station.x),y:Number(station.y),origin:String(station.origin || "Your town")})) : [];
+      const knownStation=name => !!BASE_STATIONS[name] || customStations.some(station => station.name === name);
+      const savedConnections=Array.isArray(saved.connections) ? saved.connections.filter(connection => {
+        if (!Array.isArray(connection) || !knownStation(connection[0]) || !knownStation(connection[1]) || !(Number(connection[2]) > 0)) return false;
+        return true;
+      }) : [];
+      return {
+        source:saved.source === "3e" ? "3e" : "4e",
+        speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
+        layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
+        fares:Array.isArray(saved.fares) ? saved.fares : [],
+        connections:savedConnections.map(([from,to,miles]) => [from,to,Number(miles)]),
+        disabledConnections:Array.isArray(saved.disabledConnections) ? [...new Set(saved.disabledConnections.filter(key => isBuiltInEdge(key)))] : [],
+        customStations,atlasVersion:1,bridgeCorrection:true,showCustom:saved.showCustom !== false
+      };
+    } catch { return {...DEFAULTS,fares:[],connections:[],disabledConnections:[],customStations:[]}; }
   }
-  let state = load();
-  let currentRoute = null;
-  let view = {x:0,y:0,w:1000,h:700};
-  let dragged = false;
-  let dragStart = null;
-  const el = (id) => document.getElementById(id);
-  const NS = 'http://www.w3.org/2000/svg';
-  const safeNumber = (n) => typeof n === 'number' && Number.isFinite(n);
-  function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(state));}catch(_){} }
-  function canon(text){return String(text||'').trim().replace(/\s+/g,' ')}
-  function allNames(){
-    return [...new Set([...original4E,...original3E].flatMap(x=>x.slice(0,2))
-      .concat(state.customConnections.flatMap(x=>[x.a,x.b]))
-      .concat(state.customStations.map(x=>x.name)))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+
+  function getBuiltInRails() { return settings.source === "3e" ? RAILS_3E : RAILS_4E; }
+  function isBuiltInEdge(key) { return [...RAILS_4E,...RAILS_3E].some(connection => edgeKey(connection[0],connection[1]) === key); }
+  function getRails() {
+    const merged=new Map();
+    [...getBuiltInRails(),...(settings.showCustom === false ? [] : settings.connections)].forEach(connection => merged.set(edgeKey(connection[0],connection[1]),connection));
+    return [...merged.entries()].filter(([key]) => !settings.disabledConnections.includes(key)).map(([,connection]) => connection);
   }
-  function normalizeName(name){const value=canon(name);return allNames().find(n=>n.toLocaleLowerCase()===value.toLocaleLowerCase())||value;}
-  function point(name){
-    const custom = state.customStations.find(x=>x.name===name);
-    const v = custom ? [custom.x,custom.y] : positions[name];
-    if (v && safeNumber(Number(v[0])) && safeNumber(Number(v[1]))) return [Number(v[0])*10,Number(v[1])*7];
-    let hash=0;for(const ch of name) hash=((hash*31)+ch.charCodeAt(0))|0;
-    return [100+Math.abs(hash%790),100+Math.abs((hash>>8)%500)];
+  function getStation(name) {
+    return BASE_STATIONS[name] || settings.customStations.find(station => station.name === name) || null;
   }
-  function getEdges(){
-    const base = state.edition==='4E'?original4E:state.edition==='3E'?original3E:[];
-    const connections = base.map(([a,b,miles])=>({a,b,miles,kind:'base'}));
-    for(const c of state.customConnections) if(c.enabled!==false && Number(c.miles)>0) connections.push({...c,kind:'custom'});
-    return connections;
+  function getStationNames(all=false) { return [...Object.keys(BASE_STATIONS),...(all || settings.showCustom !== false ? settings.customStations.map(station => station.name) : [])].sort((a,b) => a.localeCompare(b)); }
+  function edgeKey(a,b) { return [a,b].sort().join("|"); }
+  function svgElement(tag,attributes={}) {
+    const node = document.createElementNS(SVG_NS,tag);
+    Object.entries(attributes).forEach(([key,value]) => node.setAttribute(key,value));
+    return node;
   }
-  function pathFinder(from,to,edges){
-    if(!from||!to) return null;
-    if(from===to) return {miles:0,path:[from],legs:[]};
-    const nodes=new Map();
-    for(const e of edges){
-      if(!nodes.has(e.a))nodes.set(e.a,[]);
-      if(!nodes.has(e.b))nodes.set(e.b,[]);
-      nodes.get(e.a).push({node:e.b,miles:e.miles,kind:e.kind});
-      nodes.get(e.b).push({node:e.a,miles:e.miles,kind:e.kind});
+
+  function makeGraph() {
+    const graph = {};
+    getRails().forEach(([a,b,distance]) => {
+      (graph[a] ||= []).push({name:b,distance});
+      (graph[b] ||= []).push({name:a,distance});
+    });
+    return graph;
+  }
+
+  function shortestPath(start,end) {
+    const graph = makeGraph();
+    if (!graph[start] || !graph[end]) return null;
+    const distance = Object.fromEntries(Object.keys(graph).map(node => [node,Infinity]));
+    const previous = {};
+    const unvisited = new Set(Object.keys(graph));
+    distance[start] = 0;
+    while (unvisited.size) {
+      let current = null;
+      for (const node of unvisited) if (current === null || distance[node] < distance[current]) current = node;
+      if (current === null || distance[current] === Infinity) break;
+      unvisited.delete(current);
+      if (current === end) break;
+      graph[current].forEach(edge => {
+        const candidate = distance[current] + edge.distance;
+        if (candidate < distance[edge.name]) { distance[edge.name] = candidate; previous[edge.name] = current; }
+      });
     }
-    if(!nodes.has(from)||!nodes.has(to))return null;
-    const distances=new Map([[from,0]]), previous=new Map(), visited=new Set();
-    while(visited.size<nodes.size){
-      let name=null,dist=Infinity;
-      for(const node of nodes.keys()) if(!visited.has(node)&&(distances.get(node)??Infinity)<dist){name=node;dist=distances.get(node);}
-      if(name===null||dist===Infinity)break;
-      if(name===to)break;
-      visited.add(name);
-      for(const link of nodes.get(name)){
-        const trial=dist+Number(link.miles);
-        if(trial<(distances.get(link.node)??Infinity)){
-          distances.set(link.node,trial);
-          previous.set(link.node,{node:name,miles:link.miles,kind:link.kind});
-        }
+    if (distance[end] === Infinity) return null;
+    const path = [];
+    for (let at=end; at; at=previous[at]) { path.unshift(at); if (at === start) break; }
+    const segments = path.slice(0,-1).map((from,index) => {
+      const to = path[index+1];
+      return {from,to,distance:graph[from].find(edge => edge.name === to).distance};
+    });
+    return {path,segments,distance:distance[end]};
+  }
+
+  function normalizedStation(value) {
+    const needle = value.trim().toLocaleLowerCase();
+    return getStationNames().find(name => name.toLocaleLowerCase() === needle) || null;
+  }
+
+  function trackPoints(a,b) {
+    const start=getStation(a), end=getStation(b);
+    const dx=end.x-start.x, dy=end.y-start.y, diagonal=Math.min(Math.abs(dx),Math.abs(dy));
+    const bend=Math.abs(dx)>Math.abs(dy) ? {x:end.x-Math.sign(dx)*diagonal,y:start.y} : {x:start.x,y:end.y-Math.sign(dy)*diagonal};
+    return [start,bend,end];
+  }
+  function lineFor(a,b,className) {
+    return svgElement("polyline",{points:trackPoints(a,b).map(p=>p.x+","+p.y).join(" "),class:className,fill:"none","stroke-linejoin":"round"});
+  }
+
+  function renderMap() {
+    const routeEdges = new Set(currentJourney ? currentJourney.segments.map(segment => edgeKey(segment.from,segment.to)) : []);
+    const customEdges = new Set(settings.connections.map(connection => edgeKey(connection[0],connection[1])));
+    const base = document.createDocumentFragment();
+    const highlights = document.createDocumentFragment();
+    getRails().forEach(([a,b]) => {
+      const hit=lineFor(a,b,"rail-hit");
+      hit.addEventListener("click",event => { event.stopPropagation(); if (networkEditing) selectNetworkConnection(a,b); });
+      base.append(lineFor(a,b,"rail-base"),lineFor(a,b,customEdges.has(edgeKey(a,b)) ? "rail-custom" : "rail-line"),hit);
+      if (routeEdges.has(edgeKey(a,b))) highlights.append(lineFor(a,b,"rail-route-under"),lineFor(a,b,"rail-route"));
+    });
+    BROKEN_LINKS.forEach(([a,b]) => { if (!getRails().some(c=>edgeKey(c[0],c[1])===edgeKey(a,b))) base.append(lineFor(a,b,"rail-broken")); });
+    if (networkEditing && els.networkFrom.value && els.networkTo.value && els.networkFrom.value !== els.networkTo.value) {
+      const selectedExists=getRails().some(connection => edgeKey(connection[0],connection[1]) === edgeKey(els.networkFrom.value,els.networkTo.value));
+      highlights.append(lineFor(els.networkFrom.value,els.networkTo.value,selectedExists ? "rail-edit-selected" : "rail-preview"));
+    }
+    els.railLines.replaceChildren(base,highlights);
+
+    const stations = document.createDocumentFragment();
+    getStationNames().forEach(name => {
+      const point=getStation(name), [dx,dy,anchor]=point.l || [10,-10,"start"];
+      const targetLabel=networkEditing ? networkPanel === "towns" ? "existing station" : `custom route ${networkActiveField}` : activeField === "from" ? "departure" : "destination";
+      const group=svgElement("g",{class:"station",tabindex:"0",role:"button","aria-label":`${name}. Select as ${targetLabel}.`,transform:`translate(${point.x} ${point.y})`});
+      if (!BASE_STATIONS[name]) group.classList.add("custom");
+      if (currentJourney?.path.includes(name)) group.classList.add("on-route");
+      if (name === normalizedStation(els.from.value)) group.classList.add("selected","start");
+      if (name === normalizedStation(els.to.value)) group.classList.add("selected","end");
+      if (networkEditing && name === els.networkFrom.value) group.classList.add("editor-from");
+      if (networkEditing && name === els.networkTo.value) group.classList.add("editor-to");
+      group.append(svgElement("circle",{class:"station-hit",r:"19"}),svgElement("circle",{class:"station-dot",r:"5"}));
+      const label=svgElement("text",{class:"station-label",x:dx,y:dy,"text-anchor":anchor}); label.textContent=name; group.append(label);
+      group.addEventListener("click",event => { event.stopPropagation(); chooseStation(name); });
+      group.addEventListener("keydown",event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseStation(name); } });
+      group.addEventListener("pointerenter",event => showStationTooltip(name,event));
+      group.addEventListener("pointermove",event => positionTooltip(event));
+      group.addEventListener("pointerleave",hideTooltip);
+      stations.append(group);
+    });
+    if (networkEditing && networkPanel === "towns" && draftTownPoint) {
+      const {x,y}=draftTownPoint, draft=svgElement("g",{class:"station-draft",transform:`translate(${x} ${y})`,"aria-hidden":"true"});
+      draft.append(svgElement("circle",{r:"14"}),svgElement("line",{x1:"-22",y1:"0",x2:"22",y2:"0"}),svgElement("line",{x1:"0",y1:"-22",x2:"0",y2:"22"}));
+      stations.append(draft);
+    }
+    els.stationLayer.replaceChildren(stations);
+  }
+
+  function setActiveField(field) {
+    activeField = field;
+    els.fromMode.classList.toggle("active",field === "from");
+    els.toMode.classList.toggle("active",field === "to");
+    els.hint.innerHTML = `<span></span>Click a station for ${field === "from" ? "departure" : "destination"} · Right-click for map tools`;
+    renderMap();
+  }
+
+  function chooseStation(name) {
+    if (networkEditing && networkPanel === "towns") return;
+    if (networkEditing) {
+      if (networkActiveField === "from") {
+        els.networkFrom.value=name;
+        if (els.networkTo.value === name) els.networkTo.value="";
+        setNetworkActiveField("to");
+      } else {
+        els.networkTo.value=name;
+        if (els.networkFrom.value === name) els.networkFrom.value="";
+        setNetworkActiveField("from");
       }
+      els.networkError.hidden=true; renderMap(); return;
     }
-    if(!previous.has(to))return null;
-    const path=[to],legs=[];
-    for(let cursor=to;cursor!==from;){
-      const entry=previous.get(cursor);
-      if(!entry)return null;
-      legs.unshift({from:entry.node,to:cursor,miles:entry.miles,kind:entry.kind});
-      cursor=entry.node;path.unshift(cursor);
+    if (activeField === "from") {
+      els.from.value = name;
+      if (name === normalizedStation(els.to.value)) els.to.value = "";
+      setActiveField("to");
+    } else {
+      els.to.value = name;
+      if (name === normalizedStation(els.from.value)) els.from.value = "";
+      setActiveField("from");
     }
-    return {miles:distances.get(to),path,legs};
+    planJourney();
   }
-  function routeTime(route){return route.miles/state.speed+Math.max(0,route.path.length-2)*state.layover;}
-  function timeString(hours){
-    const mins=Math.round(hours*60),days=Math.floor(mins/1440),remaining=mins%1440;
-    const h=Math.floor(remaining/60),m=remaining%60;
-    return (days?days+'d ':'')+h+'h '+String(m).padStart(2,'0')+'m';
+
+  function planJourney() {
+    els.error.hidden = true;
+    const start=normalizedStation(els.from.value), end=normalizedStation(els.to.value);
+    if (!start || !end) return showError("Choose two visible stations connected by active railway.");
+    if (start === end) return showError("Choose two different stations.");
+    const journey=shortestPath(start,end);
+    if (!journey) return showError(`No active lightning rail route connects ${start} and ${end}.`);
+    const stops=Math.max(0,journey.path.length-2);
+    journey.hours=journey.distance/settings.speed+stops*settings.layover;
+    currentJourney={...journey,start,end};
+    renderJourney(); renderMap(); fitRoute();
   }
-  const fmtMiles=n=>new Intl.NumberFormat('en-US',{maximumFractionDigits:1}).format(n);
-  function formatGP(value){
-    const copper=Math.max(0,Math.round(value*100));
-    const gp=Math.floor(copper/100),sp=Math.floor(copper%100/10),cp=copper%10;
-    return [gp?gp.toLocaleString('en-US')+' gp':'',sp?sp+' sp':'',cp?cp+' cp':''].filter(Boolean).join(' ')||'0 gp';
+
+  function showError(message) {
+    currentJourney=null; els.error.textContent=message; els.error.hidden=false;
+    $("summaryFrom").textContent=els.from.value || "Choose station"; $("summaryTo").textContent=els.to.value || "Choose station";
+    ["distanceValue","timeValue","stopsValue"].forEach(id=>$(id).textContent="–");
+    els.routeList.replaceChildren(); els.fareList.replaceChildren(); renderMap();
   }
-  function setText(id,text){el(id).textContent=text;}
-  function setFeedback(text,success=false,editor=false){const node=el(editor?'editor-feedback':'feedback');node.textContent=text;node.classList.toggle('success',success);}
-  function svg(tag,attrs={},parent=el('rail-map')){
-    const node=document.createElementNS(NS,tag);
-    for(const [key,val] of Object.entries(attrs))node.setAttribute(key,String(val));
-    parent.appendChild(node);return node;
-  }
-  function showMap(){
-    const root=el('rail-map');root.replaceChildren();
-    const terrain=svg('g',{'aria-hidden':'true'});
-    svg('path',{d:'M92 165 C150 101 221 149 280 120 Q343 61 430 117 L536 93 Q631 46 727 97 L790 141 Q896 159 927 260 L961 379 L918 502 Q855 571 787 558 L701 629 L566 601 Q480 664 382 604 L274 610 Q174 536 107 473 L45 361 Z',class:'land-mass'},terrain);
-    for(let i=1;i<=9;i++) svg('path',{d:`M ${i*100} 0 V 700`,class:'map-gridline'},terrain);
-    for(let i=1;i<=6;i++) svg('path',{d:`M 0 ${i*100} H 1000`,class:'map-gridline'},terrain);
-    const edges=getEdges();
-    const selected=new Set(currentRoute?.legs.map(e=>[e.from,e.to].sort().join('|'))||[]);
-    const railGroup=svg('g');
-    for(const e of edges){const [x1,y1]=point(e.a),[x2,y2]=point(e.b);
-      svg('path',{d:`M ${x1} ${y1} L ${x2} ${y2}`,class:'map-edge '+(e.kind==='custom'?'custom':'')},railGroup);
-    }
-    const pathGroup=svg('g');
-    for(const e of (currentRoute?.legs||[])){
-      const [x1,y1]=point(e.from),[x2,y2]=point(e.to);
-      svg('path',{d:`M ${x1} ${y1} L ${x2} ${y2}`,class:'map-edge selected'},pathGroup);
-    }
-    const visible=new Set(edges.flatMap(e=>[e.a,e.b]).concat(state.customStations.map(x=>x.name)));
-    const stationGroup=svg('g');
-    for(const name of [...visible].sort()){
-      const [x,y]=point(name);
-      const status=name===state.from?'start':name===state.to?'end':'';
-      const isSelected=currentRoute?.path.includes(name);
-      const g=svg('g',{class:'map-station '+status+(currentRoute&&!isSelected?' dimmed':''),tabindex:'0',role:'button','aria-label':`Select ${name} as departure`},stationGroup);
-      const t=svg('title',{},g);t.textContent=`${name} · select as departure`;
-      svg('circle',{cx:x,cy:y,r:isSelected?8.3:6.3,class:'halo'},g);
-      svg('circle',{cx:x,cy:y,r:2.5,class:'core'},g);
-      const label=svg('text',{x:x+(x>790?-13:13),y:y-11,class:'station-label','text-anchor':x>790?'end':'start'},g);
-      label.textContent=name;
-      g.addEventListener('click',(event)=>{event.stopPropagation();if(dragged)return;state.from=name;persist();refresh();});
-      g.addEventListener('keydown',(event)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();state.from=name;persist();refresh();}});
-    }
-    root.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
-  }
-  function zoom(multiplier,anchorX=view.x+view.w/2,anchorY=view.y+view.h/2){
-    const newW=Math.max(300,Math.min(1800,view.w*multiplier));
-    const newH=newW*.7;
-    const u=(anchorX-view.x)/view.w,v=(anchorY-view.y)/view.h;
-    view={x:anchorX-u*newW,y:anchorY-v*newH,w:newW,h:newH};
-    el('rail-map').setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
-  }
-  function fitRoute(){
-    if(!currentRoute||currentRoute.path.length<2){view={x:0,y:0,w:1000,h:700};showMap();return;}
-    const coords=currentRoute.path.map(point),xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]);
-    const minX=Math.min(...xs)-100,maxX=Math.max(...xs)+100,minY=Math.min(...ys)-100,maxY=Math.max(...ys)+100;
-    const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
-    const w=Math.max(400,maxX-minX,(maxY-minY)/.7);
-    view={x:cx-w/2,y:cy-w*.35,w,h:w*.7};showMap();
-  }
-  function populateOptions(){
-    const names=allNames(),data=el('station-options');data.replaceChildren();
-    for(const name of names){const o=document.createElement('option');o.value=name;data.appendChild(o);}
-  }
-  function addFareRow(fare,route){
-    const wrap=document.createElement('div');wrap.className='fare-row';
-    const info=document.createElement('div');info.className='fare-meta';
-    const name=document.createElement('strong');name.textContent=fare.name;
-    const description=document.createElement('small');
-    description.textContent=`${fare.source} · ${fare.rate} gp per ${fare.method==='day'?'day':'mile'}`;
-    info.append(name,description);
-    const amount=document.createElement('div');amount.className='fare-amount';
-    const cost=fare.method==='day'?routeTime(route)/24*fare.rate:route.miles*fare.rate;
-    amount.textContent=formatGP(cost);
-    wrap.append(info,amount);return wrap;
-  }
-  function displayFares(){
-    const box=el('fares');box.replaceChildren();
-    if(!currentRoute){box.innerHTML='<div class="empty-state">Choose connected stations to see fares.</div>';return;}
-    const fares=builtinFares.concat(orienFares,state.customFares.map(x=>({...x,group:'Custom',source:'Custom fare',method:'mile'})));
-    const filtered=fares.filter(x=>state.fareFilter==='All'?(x.group==='5E'||x.group==='4E'||x.group==='Custom'):x.group===state.fareFilter);
-    if(!filtered.length){box.innerHTML='<div class="empty-state">No fares in this category. Add a custom fare in the editor.</div>';return;}
-    for(const fare of filtered)box.appendChild(addFareRow(fare,currentRoute));
-  }
-  function displayItinerary(){
-    const box=el('itinerary');box.replaceChildren();
-    if(!currentRoute){box.innerHTML='<div class="empty-state">No route found. Edit the network or choose another pair of stations.</div>';return;}
-    for(let i=0;i<currentRoute.path.length;i++){
-      const row=document.createElement('div');row.className='itinerary-row';
-      const dot=document.createElement('div');dot.className='itinerary-node';
-      const mid=document.createElement('div'),name=document.createElement('strong'),sub=document.createElement('small');
-      name.textContent=currentRoute.path[i];
-      sub.textContent=i===0?'Departure':i===currentRoute.path.length-1?'Arrival':`Stop ${i}`;
-      mid.append(name,sub);
-      const miles=document.createElement('span');miles.className='leg-mile';
-      miles.textContent=i===0?'':`${fmtMiles(currentRoute.legs[i-1].miles)} mi`;
-      row.append(dot,mid,miles);box.appendChild(row);
-    }
-  }
-  function refresh(){
-    state.from=normalizeName(state.from);state.to=normalizeName(state.to);
-    currentRoute=pathFinder(state.from,state.to,getEdges());
-    populateOptions();
-    el('from').value=state.from;el('to').value=state.to;
-    el('speed').value=state.speed;el('layover').value=state.layover;
-    el('fare-filter').value=state.fareFilter;
-    document.querySelectorAll('[data-edition]').forEach(b=>{b.classList.toggle('active',b.dataset.edition===state.edition);b.setAttribute('aria-pressed',String(b.dataset.edition===state.edition));});
-    setText('result-from',state.from||'—');setText('result-to',state.to||'—');
-    setText('distance',currentRoute?fmtMiles(currentRoute.miles):'—');
-    setText('travel-time',currentRoute?timeString(routeTime(currentRoute)):'—');
-    setText('stops',currentRoute?String(Math.max(0,currentRoute.path.length-2)):'—');
-    setText('time-sub',state.layover?`with ${state.layover}h stopovers`:'no stopovers');
-    setFeedback(!state.from||!state.to?'Select both stations.':currentRoute?'':`No route between ${state.from} and ${state.to}. Add a connection or try another station.`);
-    displayFares();displayItinerary();showMap();
-    if(el('editor').open)renderEditor();
-  }
-  function plan(){state.from=normalizeName(el('from').value);state.to=normalizeName(el('to').value);persist();refresh();fitRoute();}
-  function uid(){return 'custom-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8)}
-  function makeButton(label,fn,cls=''){
-    const button=document.createElement('button');button.type='button';button.textContent=label;button.className='mini-btn '+cls;button.addEventListener('click',fn);return button;
-  }
-  function renderEditor(){
-    const conns=el('connection-list');conns.replaceChildren();
-    for(const c of state.customConnections){
-      const row=document.createElement('div');row.className='editor-list-row';
-      const info=document.createElement('span');info.textContent=`${c.a} ↔ ${c.b} · ${fmtMiles(c.miles)} mi`;
-      const origin=document.createElement('small');origin.textContent=c.origin||'User-created';info.appendChild(origin);
-      const actions=document.createElement('div');actions.className='actions';
-      const check=document.createElement('input');check.type='checkbox';check.checked=c.enabled!==false;check.title='Enable connection';check.setAttribute('aria-label',`Enable ${c.a} to ${c.b}`);
-      check.addEventListener('change',()=>{c.enabled=check.checked;persist();refresh();});
-      actions.append(check,makeButton('Edit',()=>{
-        const next=prompt(`Distance in miles: ${c.a} ↔ ${c.b}`,String(c.miles));
-        if(next===null)return;const num=Number(next);
-        if(!Number.isFinite(num)||num<=0){setFeedback('Distance must be greater than zero.',false,true);return;}
-        c.miles=num;persist();refresh();
-      }),makeButton('Remove',()=>{
-        if(!confirm(`Remove custom connection ${c.a} ↔ ${c.b}?`))return;
-        state.customConnections=state.customConnections.filter(x=>x.id!==c.id);persist();refresh();
-      },'delete'));
-      row.append(info,actions);conns.appendChild(row);
-    }
-    if(!state.customConnections.length)conns.innerHTML='<div class="empty-state">No custom connections.</div>';
-    const stations=el('station-list');stations.replaceChildren();
-    for(const st of state.customStations){
-      const row=document.createElement('div');row.className='editor-list-row';
-      const title=document.createElement('span');title.textContent=`${st.name} · (${st.x}, ${st.y})`;
-      const actions=document.createElement('div');actions.className='actions';
-      actions.append(makeButton('Rename',()=>{
-        const name=canon(prompt('Station name:',st.name));if(!name||name===st.name)return;
-        if(allNames().some(n=>n.toLowerCase()===name.toLowerCase())){setFeedback('Station name already exists.',false,true);return;}
-        const old=st.name;st.name=name;
-        for(const c of state.customConnections){if(c.a===old)c.a=name;if(c.b===old)c.b=name;}
-        if(state.from===old)state.from=name;if(state.to===old)state.to=name;
-        persist();refresh();
-      }),makeButton('Move',()=>{
-        const x=prompt('Map X (0–100)',String(st.x));if(x===null)return;
-        const y=prompt('Map Y (0–100)',String(st.y));if(y===null)return;
-        if(![x,y].every(n=>n!==''&&Number(n)>=0&&Number(n)<=100)){setFeedback('Coordinates must be 0–100.',false,true);return;}
-        st.x=Number(x);st.y=Number(y);persist();refresh();
-      }),makeButton('Remove',()=>{
-        if(!confirm(`Remove station ${st.name} and its custom connections?`))return;
-        state.customStations=state.customStations.filter(x=>x.id!==st.id);
-        state.customConnections=state.customConnections.filter(x=>x.a!==st.name&&x.b!==st.name);
-        persist();refresh();
-      },'delete'));
-      row.append(title,actions);stations.appendChild(row);
-    }
-    if(!state.customStations.length)stations.innerHTML='<div class="empty-state">No user-added stations yet.</div>';
-    const fares=el('fare-list-editor');fares.replaceChildren();
-    for(const fare of state.customFares){
-      const row=document.createElement('div');row.className='editor-list-row';
-      const info=document.createElement('span');info.textContent=`${fare.name} · ${fare.rate} gp/mile`;
-      row.append(info,makeButton('Remove',()=>{state.customFares=state.customFares.filter(x=>x.id!==fare.id);persist();refresh();},'delete'));fares.appendChild(row);
-    }
-    if(!state.customFares.length)fares.innerHTML='<div class="empty-state">No additional fares. Original source fares and House Orien classes are available without editing.</div>';
-  }
-  function bind(){
-    el('plan').addEventListener('click',plan);
-    for(const id of ['from','to'])el(id).addEventListener('keydown',e=>{if(e.key==='Enter')plan();});
-    el('swap').addEventListener('click',()=>{const a=el('from').value;el('from').value=el('to').value;el('to').value=a;plan();});
-    document.querySelectorAll('[data-edition]').forEach(button=>button.addEventListener('click',()=>{state.edition=button.dataset.edition;persist();refresh();fitRoute();}));
-    el('fare-filter').addEventListener('change',e=>{state.fareFilter=e.target.value;persist();displayFares();});
-    el('journey-settings').addEventListener('click',()=>{const body=el('journey-settings-body');body.hidden=!body.hidden;});
-    for(const id of ['speed','layover'])el(id).addEventListener('change',e=>{
-      const n=Number(e.target.value);
-      if(!Number.isFinite(n)||(id==='speed'&&(n<=0||n>200))||(id==='layover'&&(n<0||n>48))){setFeedback('Check your speed or layover settings.');refresh();return;}
-      state[id]=n;persist();refresh();
-    });
-    el('copy-route').addEventListener('click',async()=>{
-      if(!currentRoute){setFeedback('Nothing to copy yet.');return;}
-      const text=[`${state.from} → ${state.to}`,`${fmtMiles(currentRoute.miles)} miles, ${timeString(routeTime(currentRoute))}`, ...currentRoute.path.map((name,i)=>`${i+1}. ${name}${i>0?' ('+fmtMiles(currentRoute.legs[i-1].miles)+' mi)':''}`)].join('\n');
-      try{await navigator.clipboard.writeText(text);setFeedback('Itinerary copied.',true);}
-      catch(_){const field=document.createElement('textarea');field.value=text;document.body.appendChild(field);field.select();try{document.execCommand('copy');setFeedback('Itinerary copied.',true);}catch(_e){setFeedback('Copy is unavailable in this browser.');}field.remove();}
-    });
-    el('zoom-in').addEventListener('click',()=>zoom(.78));el('zoom-out').addEventListener('click',()=>zoom(1.28));el('fit-route').addEventListener('click',fitRoute);
-    const map=el('rail-map');
-    map.addEventListener('wheel',e=>{e.preventDefault();const bounds=map.getBoundingClientRect();const u=(e.clientX-bounds.left)/bounds.width,v=(e.clientY-bounds.top)/bounds.height;zoom(e.deltaY>0?1.12:.89,view.x+view.w*u,view.y+view.h*v);},{passive:false});
-    map.addEventListener('pointerdown',e=>{if(e.button!==0)return;dragStart={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};dragged=false;map.setPointerCapture(e.pointerId);});
-    map.addEventListener('pointermove',e=>{if(!dragStart)return;const deltaX=e.clientX-dragStart.x,deltaY=e.clientY-dragStart.y;
-      if(Math.abs(deltaX)+Math.abs(deltaY)>5)dragged=true;
-      if(!dragged)return;map.classList.add('dragging');const rect=map.getBoundingClientRect();
-      view.x=dragStart.vx-deltaX*view.w/rect.width;view.y=dragStart.vy-deltaY*view.h/rect.height;
-      map.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`);
-    });
-    function finishDrag(){dragStart=null;map.classList.remove('dragging');setTimeout(()=>{dragged=false;},0);}
-    map.addEventListener('pointerup',finishDrag);map.addEventListener('pointercancel',finishDrag);
-    el('edit-network').addEventListener('click',()=>{renderEditor();el('editor').showModal();});
-    document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
-      document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('selected',x===button));
-      document.querySelectorAll('.tab-panel').forEach(x=>x.hidden=x.id!=='tab-'+button.dataset.tab);
-      setFeedback('',false,true);
+
+  function renderJourney() {
+    const journey=currentJourney;
+    const stops=Math.max(0,journey.path.length-2);
+    $("summaryFrom").textContent=journey.start; $("summaryTo").textContent=journey.end;
+    $("distanceValue").textContent=journey.distance.toLocaleString(); $("timeValue").textContent=formatDuration(journey.hours);
+    $("stopsValue").textContent=stops; $("timeNote").textContent=settings.layover ? `with ${settings.layover}h layovers` : "no scheduled layovers";
+    els.routeList.replaceChildren(...journey.path.map((station,index) => {
+      const item=document.createElement("li");
+      const descriptor=index===0 ? "Departure" : index===journey.path.length-1 ? "Arrival" : `Stop ${index}`;
+      const segment=journey.segments[index];
+      item.innerHTML=`<span class="route-dot"></span><div><strong>${escapeHtml(station)}</strong><small>${descriptor}</small></div><span class="route-distance">${segment ? `${segment.distance.toLocaleString()} mi` : ""}</span>`;
+      return item;
     }));
-    el('add-connection').addEventListener('submit',e=>{
-      e.preventDefault();const a=normalizeName(el('conn-a').value),b=normalizeName(el('conn-b').value),miles=Number(el('conn-miles').value);
-      if(!a||!b||a===b||!Number.isFinite(miles)||miles<=0){setFeedback('Choose two different stations and a positive distance.',false,true);return;}
-      if(state.customConnections.some(c=>[c.a,c.b].sort().join('|')===[a,b].sort().join('|'))){setFeedback('A custom connection between these stations already exists. Use Edit instead.',false,true);return;}
-      for(const name of [a,b])if(!positions[name]&&!state.customStations.some(x=>x.name===name))state.customStations.push({id:uid(),name,x:50,y:50});
-      state.customConnections.push({id:uid(),a,b,miles,enabled:true,origin:'User-created'});
-      el('conn-a').value='';el('conn-b').value='';el('conn-miles').value='';persist();refresh();setFeedback('Connection added.',true,true);
-    });
-    el('add-station').addEventListener('submit',e=>{
-      e.preventDefault();const name=canon(el('station-name').value),x=Number(el('station-x').value),y=Number(el('station-y').value);
-      if(!name||allNames().some(n=>n.toLowerCase()===name.toLowerCase())||![x,y].every(n=>Number.isFinite(n)&&n>=0&&n<=100)){
-        setFeedback('Use a unique station name and coordinates between 0 and 100.',false,true);return;
-      }
-      state.customStations.push({id:uid(),name,x,y});el('station-name').value='';persist();refresh();setFeedback('Station added. Connect it to the railway to make journeys possible.',true,true);
-    });
-    el('add-fare').addEventListener('submit',e=>{
-      e.preventDefault();const name=canon(el('fare-name').value),rate=Number(el('fare-rate').value);
-      if(!name||!Number.isFinite(rate)||rate<0){setFeedback('Enter a fare name and valid nonnegative GP per mile.',false,true);return;}
-      state.customFares.push({id:uid(),name,rate});el('fare-name').value='';el('fare-rate').value='';persist();refresh();setFeedback('Fare added.',true,true);
-    });
-    el('export-data').addEventListener('click',()=>{
-      const file=new Blob([JSON.stringify({format:'house-orien-lightning-rail',version:1,...state},null,2)],{type:'application/json'});
-      const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download='lightning-rail-settings.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),500);
-      setFeedback('Settings exported.',true,true);
-    });
-    el('import-data').addEventListener('change',async e=>{
-      const file=e.target.files?.[0];if(!file)return;
-      try{const data=JSON.parse(await file.text());
-        if(!Array.isArray(data.customConnections)||!Array.isArray(data.customStations)||!Array.isArray(data.customFares))throw Error('Incorrect settings format.');
-        if(data.customConnections.length>1000||data.customStations.length>1000||data.customFares.length>1000)throw Error('Import too large.');
-        const connections=data.customConnections.map((c,i)=>{
-          const a=canon(c.a),b=canon(c.b),miles=Number(c.miles);
-          if(!a||!b||a===b||!Number.isFinite(miles)||miles<=0)throw Error(`Invalid connection ${i+1}`);
-          return {id:uid(),a,b,miles,enabled:c.enabled!==false,origin:canon(c.origin)||'Imported'};
-        });
-        const stations=data.customStations.map((s,i)=>{
-          const name=canon(s.name),x=Number(s.x),y=Number(s.y);
-          if(!name||![x,y].every(n=>Number.isFinite(n)&&n>=0&&n<=100))throw Error(`Invalid station ${i+1}`);
-          return {id:uid(),name,x,y};
-        });
-        const fares=data.customFares.map((f,i)=>{
-          const name=canon(f.name),rate=Number(f.rate);
-          if(!name||!Number.isFinite(rate)||rate<0)throw Error(`Invalid fare ${i+1}`);
-          return {id:uid(),name,rate};
-        });
-        state.customConnections=connections;state.customStations=stations;state.customFares=fares;persist();refresh();setFeedback('Settings imported.',true,true);
-      }catch(err){setFeedback(`Could not import: ${err.message}`,false,true);}finally{e.target.value='';}
-    });
-    el('reset-data').addEventListener('click',()=>{
-      if(!confirm('Reset custom stations, connections, fares and journey settings to defaults?'))return;
-      state=initial();persist();refresh();setFeedback('Defaults restored.',true,true);
-    });
+    renderFares();
   }
-  bind();refresh();fitRoute();
+
+  function renderFares() {
+    if (!currentJourney) return els.fareList.replaceChildren();
+    const filter=els.fareFilter.value;
+    const custom=settings.fares.map(fare => ({...fare,source:"custom",sourceName:fare.name || "Custom fare"}));
+    const fares=[...BASE_FARES,...custom].filter(fare => filter === "all" || fare.source === filter);
+    els.fareList.replaceChildren(...fares.map(fare => {
+      const item=document.createElement("article"); item.className=`fare-item${fare.source === "custom" ? " custom" : ""}`;
+      const basis=fare.basis === "mile" ? `${fare.price} gp per mile` : fare.basis === "hour" ? `${fare.price} gp per hour` : `${fare.price} gp per day`;
+      item.innerHTML=`<div class="fare-name"><strong>${escapeHtml(fare.tier)}</strong><span>${escapeHtml(fare.sourceName)} · ${basis}</span></div><div class="money"><b>${formatMoney(calculateFare(fare,currentJourney))}</b><small>estimated fare</small></div>`;
+      return item;
+    }));
+    if (!fares.length) {
+      const empty=document.createElement("p"); empty.className="empty-fares"; empty.textContent="No custom fares have been added yet."; els.fareList.append(empty);
+    }
+  }
+
+  function calculateFare(fare,journey) {
+    const price=Number(fare.price) || 0;
+    if (fare.basis === "mile") return journey.distance*price;
+    if (fare.basis === "hour") return journey.hours*price;
+    return journey.hours/24*price;
+  }
+  function formatDuration(hours) {
+    const total=Math.round(hours*60), days=Math.floor(total/1440), remaining=total%1440, hrs=Math.floor(remaining/60), mins=remaining%60;
+    return days ? `${days}d ${hrs}h ${mins}m` : hrs ? `${hrs}h ${mins}m` : `${mins}m`;
+  }
+  function formatMoney(gold) {
+    const copper=Math.max(0,Math.round((Number(gold) || 0)*100));
+    const gp=Math.floor(copper/100), sp=Math.floor((copper%100)/10), cp=copper%10, parts=[];
+    if (gp) parts.push(`${gp.toLocaleString()} gp`); if (sp) parts.push(`${sp} sp`); if (cp || !parts.length) parts.push(`${cp} cp`);
+    return parts.join(" ");
+  }
+  function escapeHtml(value) { return String(value).replace(/[&<>"]/g,char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[char])); }
+
+  function updateTransform(animate=true) {
+    els.stage.classList.toggle("atlas-detail",view.scale >= 2.8);
+    els.viewport.style.transition=animate ? "transform .28s ease" : "none";
+    els.viewport.setAttribute("transform",`translate(${view.x} ${view.y}) scale(${view.scale})`);
+  }
+  function clampView() {
+    const pad=80;
+    view.x=Math.min(pad,Math.max(1200-1200*view.scale-pad,view.x));
+    view.y=Math.min(pad,Math.max(760-760*view.scale-pad,view.y));
+  }
+  function zoomAt(factor,cx=600,cy=380) {
+    const next=Math.min(8,Math.max(1,view.scale*factor));
+    const ratio=next/view.scale;
+    view.x=cx-(cx-view.x)*ratio; view.y=cy-(cy-view.y)*ratio; view.scale=next;
+    clampView(); updateTransform();
+  }
+  function fitRoute() {
+    if (!currentJourney) { view={scale:1,x:0,y:0}; return updateTransform(); }
+    const points=currentJourney.path.map(name => getStation(name));
+    const xs=points.map(p=>p.x), ys=points.map(p=>p.y);
+    const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
+    const width=Math.max(260,maxX-minX+190), height=Math.max(210,maxY-minY+160);
+    const scale=Math.min(3.5,Math.max(1,Math.min(1060/width,650/height)));
+    view={scale,x:600-((minX+maxX)/2)*scale,y:380-((minY+maxY)/2)*scale}; clampView(); updateTransform();
+  }
+  function pointerToMap(event) {
+    const point=els.svg.createSVGPoint();
+    point.x=event.clientX; point.y=event.clientY;
+    return point.matrixTransform(els.svg.getScreenCTM().inverse());
+  }
+  function pointerToWorld(event) {
+    const point=els.svg.createSVGPoint();
+    point.x=event.clientX; point.y=event.clientY;
+    return point.matrixTransform(els.viewport.getScreenCTM().inverse());
+  }
+
+  function closeMapMenu(restoreFocus=false) {
+    const menu=$("mapContextMenu");
+    menu.hidden=true;
+    if (restoreFocus) els.svg.focus();
+  }
+  function openMapMenu(event) {
+    event.preventDefault(); hideTooltip();
+    const point=pointerToWorld(event), menu=$("mapContextMenu");
+    const matrix=els.viewport.getScreenCTM();
+    const tolerance=14/Math.hypot(matrix.a,matrix.b);
+    const town=getStationNames().find(name => Math.hypot(getStation(name).x-point.x,getStation(name).y-point.y) <= tolerance);
+    let nearest=null, best=tolerance;
+    if (!town) getRails().forEach(connection => {
+      const points=trackPoints(connection[0],connection[1]);
+      points.slice(1).forEach((b,i)=>{
+      const a=points[i];
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const t=Math.max(0,Math.min(1,((point.x-a.x)*dx+(point.y-a.y)*dy)/(dx*dx+dy*dy || 1)));
+      const distance=Math.hypot(point.x-a.x-t*dx,point.y-a.y-t*dy);
+      if (distance<best) { best=distance; nearest=connection; }
+      });
+    });
+    menu.replaceChildren();
+    const title=document.createElement("strong");
+    title.textContent=town || (nearest ? nearest[0]+" ↔ "+nearest[1] : "Map actions");
+    menu.append(title);
+    const action=(label,run,danger=false) => {
+      const button=document.createElement("button");
+      button.type="button"; button.role="menuitem"; button.textContent=label;
+      if (danger) button.className="danger";
+      button.addEventListener("click",()=>{ closeMapMenu(); run(); });
+      menu.append(button);
+    };
+    if (town) {
+      if (!BASE_STATIONS[town]) {
+        action("Edit / move town",()=>editCustomTown(town));
+        action("Remove custom town…",()=>removeCustomTown(town),true);
+      }
+      action("Directions from here",()=>{ closeNetworkEditor(); els.from.value=town; setActiveField("to"); planJourney(); });
+      action("Directions to here",()=>{ closeNetworkEditor(); els.to.value=town; setActiveField("from"); planJourney(); });
+      action("Connect from this town",()=>{ openNetworkEditor(); els.networkFrom.value=town; els.networkTo.value=""; els.networkDistance.value=""; setNetworkActiveField("to"); els.networkTo.focus(); });
+    } else if (nearest) {
+      const edit=()=>{ openNetworkEditor(); selectNetworkConnection(nearest[0],nearest[1]); };
+      action("Edit connection",()=>{ edit(); els.networkDistance.focus(); els.networkDistance.select(); });
+      action("Remove connection…",()=>{
+        if (window.confirm("Remove the connection between "+nearest[0]+" and "+nearest[1]+"?")) { edit(); removeSelectedNetworkRoute(); }
+      },true);
+    } else {
+      action("Place town here",()=>{
+        openNetworkEditor(); setNetworkPanel("towns"); startTownPlacement(); selectTownPosition(event); els.townName.focus();
+      });
+    }
+    menu.hidden=false;
+    menu.style.left=Math.max(8,Math.min(event.clientX,window.innerWidth-menu.offsetWidth-8))+"px";
+    menu.style.top=Math.max(8,Math.min(event.clientY,window.innerHeight-menu.offsetHeight-8))+"px";
+    menu.querySelector("button").focus();
+  }
+
+  function showStationTooltip(name,event) {
+    const station=getStation(name), region=station?.region ? ` · ${station.region}` : "";
+    els.tooltip.textContent=networkEditing && networkPanel === "towns" ? `${name}${region}` : `${name}${region} · click to set ${networkEditing ? `route ${networkActiveField}` : activeField}`;
+    els.tooltip.hidden=false; positionTooltip(event);
+  }
+  function positionTooltip(event) { els.tooltip.style.left=`${event.clientX}px`; els.tooltip.style.top=`${event.clientY}px`; }
+  function hideTooltip() { els.tooltip.hidden=true; }
+  function toast(message) { els.toast.textContent=message; els.toast.classList.add("show"); clearTimeout(toast.timer); toast.timer=setTimeout(()=>els.toast.classList.remove("show"),1800); }
+
+  function persistSettings() { localStorage.setItem("lightningRailSettings",JSON.stringify(settings)); }
+  function setNetworkActiveField(field) {
+    networkActiveField=field;
+    els.networkFromLabel.classList.toggle("active",field === "from");
+    els.networkToLabel.classList.toggle("active",field === "to");
+    updateNetworkActions(); renderMap();
+  }
+  function setNetworkPanel(panel) {
+    networkPanel=panel;
+    const connections=panel === "connections";
+    els.connectionsTab.classList.toggle("active",connections); els.connectionsTab.setAttribute("aria-selected",String(connections));
+    els.townsTab.classList.toggle("active",!connections); els.townsTab.setAttribute("aria-selected",String(!connections));
+    els.connectionTools.hidden=!connections; els.townTools.hidden=connections;
+    els.stage.classList.toggle("editing-network",connections && networkEditing);
+    if (connections) cancelTownPlacement();
+    renderMap();
+  }
+  function openNetworkEditor() {
+    networkEditing=true; els.networkEditor.hidden=false; els.networkButton.setAttribute("aria-expanded","true");
+    els.hint.hidden=true; els.error.hidden=true; setNetworkPanel("connections"); setNetworkActiveField("from"); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns();
+  }
+  function closeNetworkEditor() {
+    networkEditing=false; els.networkEditor.hidden=true; els.networkButton.setAttribute("aria-expanded","false");
+    cancelTownPlacement(); els.stage.classList.remove("editing-network","editing-towns"); els.hint.hidden=false; els.networkError.hidden=true; els.townError.hidden=true; renderMap();
+  }
+  function selectNetworkConnection(from,to) {
+    els.networkFrom.value=from; els.networkTo.value=to;
+    const connection=getRails().find(item => edgeKey(item[0],item[1]) === edgeKey(from,to));
+    els.networkDistance.value=connection ? connection[2] : "";
+    els.networkError.hidden=true; updateNetworkActions(); renderMap();
+  }
+  function updateNetworkActions() {
+    const from=els.networkFrom.value,to=els.networkTo.value;
+    const exists=from && to && getRails().some(connection => edgeKey(connection[0],connection[1]) === edgeKey(from,to));
+    els.removeNetworkRoute.disabled=!exists;
+  }
+  function addNetworkRoute() {
+    const from=els.networkFrom.value, to=els.networkTo.value, miles=Number(els.networkDistance.value);
+    if (!from || !to) return showNetworkError("Choose both stations.");
+    if (from === to) return showNetworkError("A connection needs two different stations.");
+    if (!(miles > 0) || !Number.isFinite(miles)) return showNetworkError("Enter a finite distance greater than zero.");
+    const key=edgeKey(from,to);
+    settings.connections=settings.connections.filter(connection => edgeKey(connection[0],connection[1]) !== key);
+    settings.disabledConnections=settings.disabledConnections.filter(disabledKey => disabledKey !== key);
+    settings.connections.push([from,to,miles]); persistSettings();
+    els.networkDistance.value=miles; els.networkError.hidden=true; renderCustomRoutes(); renderRemovedRoutes(); updateNetworkActions(); planJourney(); renderMap(); toast("Custom connection saved");
+  }
+  function showNetworkError(message) { els.networkError.textContent=message; els.networkError.hidden=false; }
+  function removeNetworkRoute(index) {
+    settings.connections.splice(index,1); persistSettings(); renderCustomRoutes(); updateNetworkActions(); planJourney(); renderMap(); toast("Custom connection removed");
+  }
+  function removeSelectedNetworkRoute() {
+    const from=els.networkFrom.value,to=els.networkTo.value;
+    if (!from || !to) return;
+    const key=edgeKey(from,to);
+    settings.connections=settings.connections.filter(connection => edgeKey(connection[0],connection[1]) !== key);
+    if (isBuiltInEdge(key) && !settings.disabledConnections.includes(key)) settings.disabledConnections.push(key);
+    persistSettings(); els.networkDistance.value=""; renderCustomRoutes(); renderRemovedRoutes(); updateNetworkActions(); planJourney(); renderMap(); toast("Connection removed from the network");
+  }
+  function restoreBuiltInRoute(key) {
+    settings.disabledConnections=settings.disabledConnections.filter(disabledKey => disabledKey !== key); persistSettings();
+    renderRemovedRoutes(); updateNetworkActions(); planJourney(); renderMap(); toast("Built-in connection restored");
+  }
+  function renderCustomRoutes() {
+    els.customRouteCount.textContent=settings.connections.length;
+    els.customRouteList.replaceChildren(...settings.connections.map((connection,index) => {
+      const [from,to,miles]=connection, item=document.createElement("div"); item.className="custom-route-item";
+      item.innerHTML=`<strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>${Number(miles).toLocaleString()} mi</span><button type="button" aria-label="Remove ${escapeHtml(from)} to ${escapeHtml(to)}">×</button>`;
+      const edit=document.createElement("button"); edit.type="button"; edit.textContent="Edit"; edit.setAttribute("aria-label","Edit "+from+" to "+to);
+      edit.addEventListener("click",()=>{ enableCustom(); setNetworkPanel("connections"); selectNetworkConnection(from,to); els.networkDistance.focus(); });
+      item.insertBefore(edit,item.querySelector("button"));
+      item.querySelector("button:last-child").addEventListener("click",()=>removeNetworkRoute(index));
+      const source=document.createElement("small"); source.textContent=window.RAIL_ATLAS.routes.some(r=>edgeKey(r[0],r[1])===edgeKey(from,to)) ? "Reference map / unverified · editable miles" : "Custom connection";
+      item.querySelector("strong").append(source); return item;
+    }));
+    if (!settings.connections.length) {
+      const empty=document.createElement("p"); empty.className="custom-route-empty"; empty.textContent="No custom connections yet."; els.customRouteList.append(empty);
+    }
+  }
+  function renderRemovedRoutes() {
+    els.removedRouteCount.textContent=settings.disabledConnections.length;
+    els.removedRouteList.replaceChildren(...settings.disabledConnections.map(key => {
+      const [from,to]=key.split("|"), item=document.createElement("div"); item.className="custom-route-item removed";
+      item.innerHTML=`<strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>disabled</span><button type="button">Restore</button>`;
+      item.querySelector("button").addEventListener("click",()=>restoreBuiltInRoute(key)); return item;
+    }));
+    if (!settings.disabledConnections.length) {
+      const empty=document.createElement("p"); empty.className="custom-route-empty"; empty.textContent="No built-in connections removed."; els.removedRouteList.append(empty);
+    }
+  }
+  function startTownPlacement() {
+    draftTownPoint=null; els.saveTownButton.disabled=true;
+    townPlacementArmed=true; els.stage.classList.add("editing-towns"); els.placeTownButton.classList.add("active");
+    els.placeTownButton.textContent="Click the map"; els.townError.hidden=true;
+    els.townPlacementStatus.classList.remove("ready"); els.townPlacementStatus.querySelector("span").textContent="Click an empty position on the map";
+  }
+  function cancelTownPlacement() {
+    townPlacementArmed=false; els.stage.classList.remove("editing-towns"); els.placeTownButton.classList.remove("active"); els.placeTownButton.textContent="Place on map";
+  }
+  function selectTownPosition(event) {
+    if (!networkEditing || networkPanel !== "towns" || !townPlacementArmed || suppressMapClick) return;
+    const point=pointerToWorld(event);
+    if (point.x<0 || point.x>1200 || point.y<0 || point.y>760) return showTownError("Choose a position inside the map.");
+    draftTownPoint=point; cancelTownPlacement();
+    els.townPlacementStatus.classList.add("ready");
+    els.townPlacementStatus.querySelector("span").textContent=`Position selected · ${Math.round(draftTownPoint.x)}, ${Math.round(draftTownPoint.y)}`;
+    els.saveTownButton.disabled=false; els.townError.hidden=true; renderMap();
+  }
+  function addCustomTown() {
+    const name=els.townName.value.trim(), region=els.townRegion.value.trim();
+    if (!name) return showTownError("Enter a town name.");
+    if (name.includes("|") || name in Object.prototype) return showTownError("Please use a different town name without the | character.");
+    if (getStationNames(true).some(existing => existing !== editingTown && existing.toLocaleLowerCase() === name.toLocaleLowerCase())) return showTownError("A station with this name already exists.");
+    if (!draftTownPoint) return showTownError("Place the town on the map first.");
+    if (editingTown) {
+      const old=editingTown, station=settings.customStations.find(s=>s.name===old);
+      Object.assign(station,{name,region,x:draftTownPoint.x,y:draftTownPoint.y});
+      settings.connections=settings.connections.map(([a,b,d])=>[a===old ? name : a,b===old ? name : b,d]);
+      [els.from,els.to].forEach(input=>{ if(input.value===old) input.value=name; });
+    } else settings.customStations.push({name,region,x:draftTownPoint.x,y:draftTownPoint.y,origin:"Your town"});
+    settings.showCustom=true; $("showCustom").checked=true;
+    editingTown=null; $("cancelTownEdit").hidden=true; persistSettings();
+    draftTownPoint=null; els.townName.value=""; els.townRegion.value=""; els.saveTownButton.disabled=true;
+    els.townPlacementStatus.classList.remove("ready"); els.townPlacementStatus.querySelector("span").textContent="No map position selected";
+    refreshStationOptions(); renderCustomTowns(); renderCustomRoutes(); planJourney(); toast(`${name} saved`);
+  }
+  function showTownError(message) { els.townError.textContent=message; els.townError.hidden=false; }
+  function renderCustomTowns() {
+    els.customTownCount.textContent=settings.customStations.length;
+    els.customTownList.replaceChildren(...settings.customStations.map(station => {
+      const item=document.createElement("div"); item.className="custom-route-item";
+      item.innerHTML=`<strong>${escapeHtml(station.name)}<span>${escapeHtml(station.region)}</span><small>${escapeHtml(station.origin || "Your town")}</small></strong><button type="button">Edit</button><button type="button" aria-label="Remove ${escapeHtml(station.name)}">×</button>`;
+      item.querySelector("button").addEventListener("click",()=>editCustomTown(station.name));
+      item.querySelector("button:last-child").addEventListener("click",()=>removeCustomTown(station.name));
+      return item;
+    }));
+    if (!settings.customStations.length) {
+      const empty=document.createElement("p"); empty.className="custom-route-empty"; empty.textContent="No custom towns yet."; els.customTownList.append(empty);
+    }
+  }
+  function enableCustom() { settings.showCustom=true; $("showCustom").checked=true; persistSettings(); refreshStationOptions(); }
+  function editCustomTown(name) {
+    enableCustom(); openNetworkEditor(); setNetworkPanel("towns");
+    const station=settings.customStations.find(s=>s.name===name);
+    editingTown=name; draftTownPoint={x:station.x,y:station.y};
+    els.townName.value=name; els.townRegion.value=station.region || "";
+    els.saveTownButton.disabled=false; $("cancelTownEdit").hidden=false;
+    els.townPlacementStatus.querySelector("span").textContent="Editing "+name+" · Place on map to move";
+    els.townPlacementStatus.classList.add("ready");
+    view={scale:4,x:600-station.x*4,y:380-station.y*4}; clampView(); updateTransform(); renderMap(); els.townName.focus();
+  }
+  function resetTownEditor() {
+    editingTown=null; draftTownPoint=null; cancelTownPlacement();
+    els.townName.value=""; els.townRegion.value=""; els.saveTownButton.disabled=true; $("cancelTownEdit").hidden=true;
+    els.townPlacementStatus.querySelector("span").textContent="No map position selected"; els.townPlacementStatus.classList.remove("ready"); renderMap();
+  }
+  function removeCustomTown(name) {
+    const count=settings.connections.filter(c=>c[0]===name || c[1]===name).length;
+    if (!window.confirm("Remove "+name+" and its "+count+" custom connections? Export a backup first if you want to restore them later.")) return;
+    settings.customStations=settings.customStations.filter(s=>s.name!==name);
+    settings.connections=settings.connections.filter(c=>c[0]!==name && c[1]!==name);
+    if (editingTown===name) resetTownEditor();
+    persistSettings(); refreshStationOptions(); renderCustomTowns(); renderCustomRoutes(); updateNetworkActions(); planJourney(); toast("Town and connections removed");
+  }
+  function refreshStationOptions() {
+    const fromValue=els.networkFrom.value, toValue=els.networkTo.value;
+    const stationOptions=getStationNames().map(name=>Object.assign(document.createElement("option"),{value:name,textContent:name}));
+    els.stations.replaceChildren(...stationOptions.map(option=>option.cloneNode(true)));
+    els.networkFrom.replaceChildren(Object.assign(document.createElement("option"),{value:"",textContent:"Choose station"}),...stationOptions.map(option=>option.cloneNode(true)));
+    els.networkTo.replaceChildren(Object.assign(document.createElement("option"),{value:"",textContent:"Choose station"}),...stationOptions.map(option=>option.cloneNode(true)));
+    els.networkFrom.value=getStation(fromValue) ? fromValue : ""; els.networkTo.value=getStation(toValue) ? toValue : "";
+  }
+
+  function addFareRow(fare={name:"",tier:"",price:"",basis:"mile"}) {
+    const row=$("fareTemplate").content.firstElementChild.cloneNode(true);
+    ["name","tier","price","basis"].forEach(field => row.querySelector(`[data-field="${field}"]`).value=fare[field] ?? "");
+    row.querySelector(".remove-button").addEventListener("click",()=>row.remove()); els.fareRows.append(row);
+  }
+  function openSettings() {
+    els.source.value=settings.source; els.speed.value=settings.speed; els.layover.value=settings.layover;
+    els.fareRows.replaceChildren(); settings.fares.forEach(addFareRow); els.dialog.showModal();
+  }
+  function saveSettings() {
+    const fares=[...els.fareRows.children].map(row => ({
+      name:row.querySelector('[data-field="name"]').value.trim(),tier:row.querySelector('[data-field="tier"]').value.trim(),
+      price:Number(row.querySelector('[data-field="price"]').value),basis:row.querySelector('[data-field="basis"]').value
+    })).filter(fare => fare.name && fare.tier && fare.price >= 0);
+    settings={...settings,source:els.source.value,speed:Math.max(1,Number(els.speed.value)||30),layover:Math.max(0,Number(els.layover.value)||0),fares};
+    persistSettings(); syncSourceControls(); els.dialog.close(); planJourney(); toast("Journey settings saved");
+  }
+  function syncSourceControls() { els.source.value=settings.source; els.headerSource.value=settings.source; }
+
+  els.fromMode.addEventListener("click",()=>setActiveField("from")); els.toMode.addEventListener("click",()=>setActiveField("to"));
+  els.from.addEventListener("focus",()=>setActiveField("from")); els.to.addEventListener("focus",()=>setActiveField("to"));
+  [els.from,els.to].forEach(input => input.addEventListener("change",planJourney));
+  $("swapButton").addEventListener("click",()=>{ [els.from.value,els.to.value]=[els.to.value,els.from.value]; planJourney(); });
+  els.headerSource.addEventListener("change",()=>{ settings.source=els.headerSource.value; persistSettings(); syncSourceControls(); planJourney(); });
+  els.fareFilter.addEventListener("change",renderFares);
+  els.networkButton.addEventListener("click",()=>networkEditing ? closeNetworkEditor() : openNetworkEditor());
+  $("closeNetworkButton").addEventListener("click",closeNetworkEditor);
+  els.connectionsTab.addEventListener("click",()=>setNetworkPanel("connections"));
+  els.townsTab.addEventListener("click",()=>setNetworkPanel("towns"));
+  els.networkFromLabel.addEventListener("click",()=>setNetworkActiveField("from"));
+  els.networkToLabel.addEventListener("click",()=>setNetworkActiveField("to"));
+  els.networkFrom.addEventListener("change",()=>{ if (els.networkFrom.value === els.networkTo.value) els.networkTo.value=""; if (els.networkFrom.value && els.networkTo.value) selectNetworkConnection(els.networkFrom.value,els.networkTo.value); setNetworkActiveField("to"); });
+  els.networkTo.addEventListener("change",()=>{ if (els.networkTo.value === els.networkFrom.value) els.networkFrom.value=""; if (els.networkFrom.value && els.networkTo.value) selectNetworkConnection(els.networkFrom.value,els.networkTo.value); setNetworkActiveField("from"); });
+  $("addNetworkRoute").addEventListener("click",addNetworkRoute);
+  els.removeNetworkRoute.addEventListener("click",removeSelectedNetworkRoute);
+  els.placeTownButton.addEventListener("click",startTownPlacement);
+  els.saveTownButton.addEventListener("click",addCustomTown);
+  $("cancelTownEdit").addEventListener("click",resetTownEditor);
+  $("showCustom").checked=settings.showCustom !== false;
+  $("showCustom").addEventListener("change",()=>{
+    settings.showCustom=$("showCustom").checked; persistSettings(); resetTownEditor(); refreshStationOptions(); updateNetworkActions(); planJourney();
+  });
+  $("exportNetwork").addEventListener("click",()=>{
+    const url=URL.createObjectURL(new Blob([JSON.stringify(settings,null,2)],{type:"application/json"}));
+    const a=document.createElement("a"); a.href=url; a.download="khorvaire-network.json"; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+  $("settingsButton").addEventListener("click",openSettings); $("addFare").addEventListener("click",()=>addFareRow()); $("saveSettings").addEventListener("click",saveSettings);
+  $("resetSettings").addEventListener("click",()=>{
+    if (!window.confirm("Reset fares, custom towns, and railways to atlas defaults?")) return;
+    settings=migrateAtlas(structuredClone(DEFAULTS)); resetTownEditor(); $("showCustom").checked=true; syncSourceControls(); els.speed.value=settings.speed; els.layover.value=settings.layover; els.fareRows.replaceChildren(); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas defaults restored");
+  });
+  $("copyButton").addEventListener("click",async()=>{
+    if (!currentJourney) return;
+    const text=`${currentJourney.start} to ${currentJourney.end}\n${currentJourney.distance} miles · ${formatDuration(currentJourney.hours)}\n${currentJourney.path.join(" → ")}`;
+    try { await navigator.clipboard.writeText(text); toast("Itinerary copied"); } catch { toast("Could not copy itinerary"); }
+  });
+  $("zoomInButton").addEventListener("click",()=>zoomAt(1.25)); $("zoomOutButton").addEventListener("click",()=>zoomAt(.8)); $("fitButton").addEventListener("click",fitRoute);
+  els.svg.addEventListener("wheel",event=>{ event.preventDefault(); const point=pointerToMap(event); zoomAt(event.deltaY<0?1.14:.88,point.x,point.y); },{passive:false});
+  els.svg.addEventListener("pointerdown",event=>{ if (event.button !== 0 || event.target.closest(".station, .rail-hit") || (networkEditing && networkPanel === "towns" && townPlacementArmed)) return; drag={clientX:event.clientX,clientY:event.clientY,x:view.x,y:view.y,moved:false}; els.svg.setPointerCapture(event.pointerId); els.svg.classList.add("dragging"); });
+  els.svg.addEventListener("pointermove",event=>{ if (!drag) return; if (Math.hypot(event.clientX-drag.clientX,event.clientY-drag.clientY)>4) drag.moved=true; const rect=els.svg.getBoundingClientRect(); view.x=drag.x+(event.clientX-drag.clientX)*1200/rect.width; view.y=drag.y+(event.clientY-drag.clientY)*760/rect.height; clampView(); updateTransform(false); });
+  els.svg.addEventListener("pointerup",event=>{ if (!drag) return; suppressMapClick=drag.moved; drag=null; els.svg.releasePointerCapture(event.pointerId); els.svg.classList.remove("dragging"); setTimeout(()=>{ suppressMapClick=false; },0); });
+  els.svg.addEventListener("pointercancel",()=>{ drag=null; els.svg.classList.remove("dragging"); });
+  els.svg.addEventListener("click",selectTownPosition);
+  els.svg.setAttribute("tabindex","0");
+  els.svg.addEventListener("contextmenu",openMapMenu);
+  document.addEventListener("pointerdown",event=>{ if (!event.target.closest("#mapContextMenu")) closeMapMenu(); });
+  document.addEventListener("keydown",event=>{
+    const menu=$("mapContextMenu");
+    if (menu.hidden) return;
+    if (event.key==="Escape") { event.preventDefault(); closeMapMenu(true); }
+    if (event.key==="Tab") closeMapMenu();
+    if (["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
+      event.preventDefault();
+      const buttons=[...menu.querySelectorAll("button")], index=buttons.indexOf(document.activeElement);
+      const next=event.key==="Home" ? 0 : event.key==="End" ? buttons.length-1 : (index+(event.key==="ArrowDown" ? 1 : -1)+buttons.length)%buttons.length;
+      buttons[next].focus();
+    }
+  });
+  window.addEventListener("resize",()=>closeMapMenu());
+  window.addEventListener("scroll",()=>closeMapMenu(),true);
+  els.dialog.addEventListener("click",event=>{ if (event.target===els.dialog) els.dialog.close(); });
+
+  refreshStationOptions(); syncSourceControls(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); renderMap(); planJourney();
 })();

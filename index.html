@@ -3,61 +3,229 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101924">
-  <meta name="description" content="House Orien Lightning Rail route, travel time and fare planner for Eberron.">
-  <title>Lightning Rail Planner | House Orien</title>
-  <link rel="stylesheet" href="./style.css">
-  <script src="./app.js" defer></script>
+  <meta name="theme-color" content="#09171e">
+  <meta name="description" content="Explore Khorvaire's lightning rail network and plan journeys by station, time, and fare.">
+  <title>Khorvaire Lightning Rail Map</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="app-shell">
-    <header class="topbar">
-      <div class="brand-mark" aria-hidden="true">✦</div>
-      <div class="brand-text"><div class="eyebrow">HOUSE ORIEN PASSENGER SERVICE</div><h1>Lightning Rail Planner</h1></div>
-      <div class="top-actions"><span class="version-pill">KHORVAIRE NETWORK</span><button id="edit-network" class="button ghost">Edit network</button></div>
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true"><i></i></div>
+      <div class="brand-copy">
+        <span>House Orien passenger service</span>
+        <h1>Lightning Rail Map</h1>
+      </div>
+      <div class="header-actions">
+        <label class="source-select"><span>Map distances</span><select id="headerDistanceSource"><option value="4e">4E</option><option value="3e">3E</option></select></label>
+        <button id="networkButton" class="network-button" type="button" aria-expanded="false" aria-controls="networkEditor">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h5v5H5zM14 14h5v5h-5zM10 8h3a3 3 0 0 1 3 3v3M7.5 10v7h6.5"/></svg><span>Edit network</span>
+        </button>
+        <button id="settingsButton" class="round-button" type="button" aria-label="Open journey settings" title="Journey settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/></svg>
+        </button>
+      </div>
     </header>
-    <main class="dashboard">
-      <section class="map-panel" aria-label="Interactive rail network map">
+
+    <main class="workspace">
+      <section class="map-panel" aria-label="Interactive lightning rail map">
         <div class="map-toolbar">
-          <div><div class="section-overline">ORIEN CARTOGRAPHY</div><h2>Rail network</h2></div>
-          <div class="source-switch" role="group" aria-label="Rail distance edition"><button data-edition="4E" class="active">4E</button><button data-edition="3E">3E</button><button data-edition="Custom">Custom</button></div>
+          <div class="map-search-card">
+            <div class="search-row">
+              <button class="route-mode active" id="fromModeButton" type="button" aria-label="Choose departure station"><i class="route-pin start"></i><span>From</span></button>
+              <label><span class="sr-only">Departure station</span><input id="fromStation" list="stations" autocomplete="off" value="Sharn"></label>
+            </div>
+            <div class="search-divider"><span></span></div>
+            <div class="search-row">
+              <button class="route-mode" id="toModeButton" type="button" aria-label="Choose destination station"><i class="route-pin end"></i><span>To</span></button>
+              <label><span class="sr-only">Destination station</span><input id="toStation" list="stations" autocomplete="off" value="Flamekeep"></label>
+            </div>
+            <button class="swap-button" id="swapButton" type="button" aria-label="Swap departure and destination" title="Swap stations">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-3 3 3 3M5 8h13M16 13l3 3-3 3m3-3H6"/></svg>
+            </button>
+          </div>
+          <datalist id="stations"></datalist>
+          <p id="selectionHint" class="selection-hint"><span></span>Click a station to change the departure</p>
+          <p id="routeError" class="map-error" role="alert" hidden></p>
+          <section id="networkEditor" class="network-editor" aria-labelledby="networkEditorTitle" hidden>
+            <div class="network-editor-header">
+              <div><p class="eyebrow">Map tools</p><h2 id="networkEditorTitle">Edit rail network</h2></div>
+              <button id="closeNetworkButton" type="button" aria-label="Close network editor">×</button>
+            </div>
+            <div class="editor-tabs" role="tablist" aria-label="Network editor mode">
+              <button id="connectionsTab" class="active" type="button" role="tab" aria-selected="true" aria-controls="connectionTools">Connections</button>
+              <button id="townsTab" type="button" role="tab" aria-selected="false" aria-controls="townTools">Towns</button>
+            </div>
+            <details class="custom-folder" open>
+              <summary>Custom collection</summary>
+              <p>Reference-map additions and your own edits. “Unverified” does not mean a town is non-canon. Imported railway distances use the map’s travel times × 30 mph.</p>
+              <label><input id="showCustom" type="checkbox" checked> Include custom towns and railways</label>
+              <button id="exportNetwork" class="text-button" type="button">Export backup</button>
+            </details>
+            <div id="connectionTools" role="tabpanel" aria-labelledby="connectionsTab">
+              <p class="network-instruction">Click a rail segment to select it for removal, or choose two stations to create or replace a connection.</p>
+              <div class="network-endpoints">
+                <label class="network-endpoint active" id="networkFromLabel"><span>From</span><select id="networkFrom"></select></label>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-5-5 5 5-5 5"/></svg>
+                <label class="network-endpoint" id="networkToLabel"><span>To</span><select id="networkTo"></select></label>
+              </div>
+              <label class="network-distance"><span>Distance</span><div><input id="networkDistance" type="number" min="1" step="1" placeholder="100"><em>miles</em></div></label>
+              <p id="networkError" class="network-error" role="alert" hidden></p>
+              <div class="network-actions">
+                <button id="addNetworkRoute" class="network-add-button" type="button">Save connection</button>
+                <button id="removeNetworkRoute" class="network-remove-button" type="button" disabled>Remove connection</button>
+              </div>
+              <div class="custom-route-heading"><span>Custom connections</span><strong id="customRouteCount">0</strong></div>
+              <div id="customRouteList" class="custom-route-list"></div>
+              <div class="custom-route-heading removed-heading"><span>Removed built-in connections</span><strong id="removedRouteCount">0</strong></div>
+              <div id="removedRouteList" class="custom-route-list"></div>
+            </div>
+            <div id="townTools" role="tabpanel" aria-labelledby="townsTab" hidden>
+              <p class="network-instruction">Name the town, then place it on an empty part of the map. Connect it to the rail network from the Connections tab.</p>
+              <div class="town-fields">
+                <label><span>Town name</span><input id="townName" type="text" maxlength="48" placeholder="New Cyre" autocomplete="off"></label>
+                <label><span>Region (optional)</span><input id="townRegion" type="text" maxlength="48" placeholder="Label only" autocomplete="off"></label>
+              </div>
+              <div class="town-placement-status" id="townPlacementStatus"><i></i><span>No map position selected</span></div>
+              <p id="townError" class="network-error" role="alert" hidden></p>
+              <div class="town-actions">
+                <button id="placeTownButton" class="town-place-button" type="button">Place on map</button>
+                <button id="saveTownButton" class="network-add-button" type="button" disabled>Save town</button>
+              </div>
+              <button id="cancelTownEdit" class="text-button" type="button" hidden>Cancel editing</button>
+              <div class="custom-route-heading"><span>Custom towns</span><strong id="customTownCount">0</strong></div>
+              <div id="customTownList" class="custom-route-list town-list"></div>
+            </div>
+          </section>
         </div>
-        <div class="map-shell" id="map-shell">
-          <div class="map-watermark" aria-hidden="true">KHORVAIRE</div>
-          <svg id="rail-map" viewBox="0 0 1000 700" role="img" aria-label="Interactive schematic rail map. Select a station to set journey departure."></svg>
-          <div class="map-controls"><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><button id="fit-route" title="Fit map" aria-label="Fit map">⌗</button></div>
-          <div class="map-legend"><span><i class="legend-line"></i>Railway</span><span><i class="legend-line custom"></i>Custom</span><span><i class="legend-line route"></i>Selected</span><span><i class="legend-dot"></i>Station</span></div>
+
+        <div class="map-stage" id="mapStage">
+          <svg id="railMap" viewBox="0 0 1200 760" role="img" aria-labelledby="mapTitle mapDesc">
+            <title id="mapTitle">Khorvaire lightning rail network</title>
+            <desc id="mapDesc">Interactive map showing stations and rail connections. Select departure and destination from the controls or by clicking stations.</desc>
+            <defs>
+              <pattern id="smallGrid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="rgba(104,145,151,.09)" stroke-width="1"/></pattern>
+              <pattern id="largeGrid" width="120" height="120" patternUnits="userSpaceOnUse"><rect width="120" height="120" fill="url(#smallGrid)"/><path d="M120 0H0V120" fill="none" stroke="rgba(104,145,151,.14)" stroke-width="1"/></pattern>
+              <filter id="routeGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="pinShadow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#001017" flood-opacity=".65"/></filter>
+            </defs>
+            <rect width="1200" height="760" fill="url(#largeGrid)"/>
+            <g id="mapViewport">
+              <g class="landmass" aria-hidden="true" hidden>
+                <path class="continent" d="M106 156 171 94 275 69 382 77 462 54 583 74 688 50 824 73 940 64 1057 105 1090 172 1065 239 1098 310 1056 397 1000 419 958 487 871 510 822 583 721 593 677 685 579 724 473 705 407 650 323 635 262 574 181 542 130 465 147 375 103 294 128 228Z"/>
+                <path class="nation breland" d="M126 383 246 326 392 325 510 374 592 438 650 557 612 687 471 704 408 648 322 634 252 577 178 542 130 463Z"/>
+                <path class="nation aundair" d="M166 112 284 71 468 72 548 131 520 246 438 329 286 322 193 265 136 197Z"/>
+                <path class="nation thrane" d="M452 191 572 153 666 234 647 362 560 429 469 372 405 303Z"/>
+                <path class="nation karrnath" d="M553 80 705 51 849 72 954 66 1065 115 1088 190 1028 280 903 315 771 303 672 248 569 183Z"/>
+                <path class="nation talenta" d="M690 261 819 269 971 313 1048 391 983 454 872 504 742 489 650 414Z"/>
+                <path class="nation mournland" d="M570 348 684 301 777 332 832 427 806 554 716 597 625 564 578 480Z"/>
+                <path class="nation zilargo" d="M423 590 513 569 640 596 677 680 584 727 476 701 407 649Z"/>
+              </g>
+              <g class="nation-labels" aria-hidden="true" hidden>
+                <text x="310" y="203">AUNDAIR</text><text x="522" y="284">THRANE</text><text x="801" y="168">KARRNATH</text>
+                <text x="345" y="509">BRELAND</text><text x="822" y="402">TALENTA PLAINS</text><text x="687" y="467">THE MOURNLAND</text><text x="517" y="665">ZILARGO</text>
+              </g>
+              <image href="./atlas.svg" width="1200" height="760" pointer-events="none"/>
+              <g id="railLines" class="rail-lines"></g>
+              <g id="stationLayer" class="station-layer"></g>
+            </g>
+          </svg>
+
+          <div class="map-controls" aria-label="Map controls">
+            <button id="zoomInButton" type="button" aria-label="Zoom in">+</button>
+            <button id="zoomOutButton" type="button" aria-label="Zoom out">−</button>
+            <button id="fitButton" type="button" aria-label="Fit route on map" title="Fit route"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button>
+          </div>
+
+          <div class="map-legend">
+            <span><i class="legend-line active"></i>Selected route</span>
+            <span><i class="legend-line"></i>Lightning rail</span>
+            <span><i class="legend-line custom"></i>Custom connection</span>
+            <span><i class="legend-town"></i>Custom town</span>
+            <span><i class="legend-gap"></i>Broken connection</span>
+          </div>
         </div>
-        <p class="map-caption">Interactive schematic map. Geography is simplified for route planning. Click a station to set the departure. Scroll to zoom, drag to pan.</p>
       </section>
-      <aside class="sidebar">
-        <section class="panel journey-panel"><div class="section-overline">PLAN A JOURNEY</div><h2>Where to?</h2>
-          <div class="field"><label for="from">FROM · DEPARTURE STATION</label><input id="from" list="station-options" autocomplete="off" placeholder="Choose departure"></div>
-          <button id="swap" class="swap-button" aria-label="Swap departure and destination" title="Swap stations">⇅</button>
-          <div class="field"><label for="to">TO · DESTINATION STATION</label><input id="to" list="station-options" autocomplete="off" placeholder="Choose destination"></div>
-          <datalist id="station-options"></datalist>
-          <div class="journey-actions"><button id="plan" class="button primary">Find route <span aria-hidden="true">↗</span></button><button id="journey-settings" class="button subtle">Journey settings ⚙</button></div>
-          <div id="journey-settings-body" class="settings-body" hidden><div class="double-input"><div class="field"><label for="speed">Speed · mph</label><input type="number" min="1" step="1" max="200" id="speed"></div><div class="field"><label for="layover">Stopover · hours</label><input type="number" min="0" max="48" step="0.25" id="layover"></div></div></div>
-          <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
-        </section>
-        <section class="panel results-panel"><div class="section-overline">SELECTED JOURNEY</div><div class="route-titles"><div><small>FROM</small><strong id="result-from">Sharn</strong></div><span class="connector-arrow">→</span><div><small>TO</small><strong id="result-to">Flamekeep</strong></div></div>
-          <div class="metrics"><div><span>DISTANCE</span><strong id="distance">—</strong><small>miles</small></div><div><span>TRAVEL TIME</span><strong id="travel-time">—</strong><small id="time-sub">including layovers</small></div><div><span>STOPS</span><strong id="stops">—</strong><small>between stations</small></div></div>
-        </section>
-        <section class="panel prices-panel"><div class="section-heading"><div><div class="section-overline">PASSENGER FARES</div><h2>Tickets</h2></div><select id="fare-filter" aria-label="Fare source"><option value="All">All sources</option><option value="5E">5E sources</option><option value="4E">4E sources</option><option value="Orien">House Orien classes</option><option value="Custom">Custom fares</option></select></div><div id="fares" class="fare-list"></div><div class="fare-footnote">Estimates only; each publication uses its own pricing method.</div></section>
-        <section class="panel itinerary-panel"><div class="section-heading"><div><div class="section-overline">ROUTE DETAILS</div><h2>Itinerary</h2></div><button id="copy-route" class="button small">Copy</button></div><div id="itinerary" class="itinerary"></div></section>
+
+      <aside class="journey-panel" aria-label="Journey details">
+        <div class="journey-scroll">
+          <section class="journey-summary">
+            <p class="eyebrow">Selected journey</p>
+            <div class="summary-route">
+              <div><span>From</span><strong id="summaryFrom">Sharn</strong></div>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-5-5 5 5-5 5"/></svg>
+              <div><span>To</span><strong id="summaryTo">Flamekeep</strong></div>
+            </div>
+            <div class="summary-metrics">
+              <article><span>Distance</span><strong id="distanceValue">-</strong><small>miles</small></article>
+              <article><span>Travel time</span><strong id="timeValue">-</strong><small id="timeNote">including stops</small></article>
+              <article><span>Stops</span><strong id="stopsValue">-</strong><small>between stations</small></article>
+            </div>
+          </section>
+
+          <section class="detail-section fares-section">
+            <div class="section-heading">
+              <div><p class="eyebrow">Passenger fares</p><h2>Tickets</h2></div>
+              <select id="fareFilter" aria-label="Fare source">
+                <option value="all">All sources</option><option value="erlw">Rising from the Last War</option><option value="wgte">Wayfinder's Guide</option><option value="ecg">Eberron Campaign Guide</option><option value="custom">Custom fares</option>
+              </select>
+            </div>
+            <div id="fareList" class="fare-list"></div>
+          </section>
+
+          <details class="detail-section itinerary-section" open>
+            <summary><span><span class="eyebrow">Route details</span><strong>Itinerary</strong></span><span class="chevron">⌄</span></summary>
+            <ol id="routeList" class="route-list"></ol>
+            <button class="text-button" id="copyButton" type="button">Copy itinerary</button>
+          </details>
+        </div>
       </aside>
     </main>
-    <footer>HOUSE ORIEN · LIGHTNING RAIL SERVICES <span>Data source: <a href="https://github.com/grJDh/eberron-trains" rel="noopener noreferrer" target="_blank">original Eberron Trains project</a> · Reconstruction for campaign planning</span></footer>
+
+    <footer><span>Interactive schematic map. Geography is simplified for route planning.</span><a href="https://github.com/grJDh/eberron-trains" target="_blank" rel="noreferrer">Original project</a></footer>
   </div>
-  <dialog id="editor" class="editor-dialog"><form method="dialog"><div class="modal-header"><div><div class="section-overline">CUSTOMIZE THE NETWORK</div><h2>Network editor</h2></div><button class="close" value="cancel" aria-label="Close">×</button></div></form>
-    <div class="editor-body"><p class="muted">Your custom stations and connections stay in this browser. Baseline 3E/4E lines remain unchanged.</p>
-      <div class="editor-tabs"><button class="selected" data-tab="connections">Connections</button><button data-tab="stations">Stations</button><button data-tab="fares">Custom fares</button><button data-tab="backup">Import / export</button></div>
-      <div id="tab-connections" class="tab-panel"><form id="add-connection" class="editor-form"><div class="double-input"><div class="field"><label for="conn-a">Station A</label><input required id="conn-a" list="station-options" placeholder="Station"></div><div class="field"><label for="conn-b">Station B</label><input required id="conn-b" list="station-options" placeholder="Station"></div></div><div class="double-input"><div class="field"><label for="conn-miles">Distance · miles</label><input required id="conn-miles" type="number" min="1" step="1" placeholder="e.g. 150"></div><button class="button primary" type="submit">Add connection</button></div></form><div id="connection-list" class="editor-list"></div></div>
-      <div id="tab-stations" class="tab-panel" hidden><form id="add-station" class="editor-form"><div class="field"><label for="station-name">New station name</label><input required id="station-name" placeholder="e.g. New Cyre"></div><div class="double-input"><div class="field"><label for="station-x">Map X · 0–100</label><input id="station-x" type="number" min="1" max="99" value="50"></div><div class="field"><label for="station-y">Map Y · 0–100</label><input id="station-y" type="number" min="1" max="99" value="50"></div></div><button class="button primary" type="submit">Add station</button></form><div id="station-list" class="editor-list"></div></div>
-      <div id="tab-fares" class="tab-panel" hidden><form id="add-fare" class="editor-form"><div class="double-input"><div class="field"><label for="fare-name">Fare name</label><input id="fare-name" required placeholder="e.g. Special carriage"></div><div class="field"><label for="fare-rate">GP / mile</label><input id="fare-rate" required type="number" min="0" step="0.001" placeholder="0.01"></div></div><button type="submit" class="button primary">Add fare</button></form><div id="fare-list-editor" class="editor-list"></div></div>
-      <div id="tab-backup" class="tab-panel" hidden><p class="muted">Export your edits to JSON for safekeeping or move them to another browser.</p><div class="backup-actions"><button id="export-data" class="button primary">Export JSON</button><label class="button subtle upload-label">Import JSON <input id="import-data" type="file" accept=".json,application/json" hidden></label><button id="reset-data" class="button danger">Reset custom data</button></div></div>
-      <div id="editor-feedback" class="feedback" role="status" aria-live="polite"></div>
-    </div>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <form method="dialog" class="dialog-shell">
+      <div class="dialog-header">
+        <div><p class="eyebrow">Calculator setup</p><h2>Journey settings</h2></div>
+        <button class="round-button" value="cancel" aria-label="Close settings" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="dialog-body">
+        <section class="settings-section">
+          <h3>Rail service</h3>
+          <div class="setting-grid">
+            <label><span>Distance source</span><select id="distanceSource"><option value="4e">4E map measurements</option><option value="3e">3E map measurements</option></select></label>
+            <label><span>Rail speed</span><div class="number-input"><input id="speedInput" type="number" min="1" step="1" value="30"><em>mph</em></div></label>
+            <label><span>Layover per stop</span><div class="number-input"><input id="layoverInput" type="number" min="0" step="0.25" value="1"><em>hours</em></div></label>
+          </div>
+        </section>
+        <section class="settings-section">
+          <div class="settings-title"><div><h3>Custom fares</h3><p>Add campaign-specific ticket classes. Custom rail connections are managed directly on the map.</p></div></div>
+          <div id="fareRows" class="editor-list"></div>
+          <button id="addFare" type="button" class="secondary-button">+ Add fare</button>
+        </section>
+      </div>
+      <div class="dialog-actions">
+        <button id="resetSettings" type="button" class="text-button danger">Reset defaults</button>
+        <button id="saveSettings" type="button" class="primary-button">Save settings</button>
+      </div>
+    </form>
   </dialog>
+
+  <template id="fareTemplate">
+    <div class="editor-row fare-row">
+      <label><span>Name</span><input data-field="name" placeholder="Campaign standard"></label>
+      <label><span>Class</span><input data-field="tier" placeholder="First class"></label>
+      <label><span>Price (gp)</span><input data-field="price" type="number" min="0" step="0.01"></label>
+      <label><span>Basis</span><select data-field="basis"><option value="mile">per mile</option><option value="day">per day</option><option value="hour">per hour</option></select></label>
+      <button type="button" class="remove-button" aria-label="Remove fare">×</button>
+    </div>
+  </template>
+  <div id="mapContextMenu" class="map-context-menu" role="menu" aria-label="Map actions" hidden></div>
+  <div id="stationTooltip" class="station-tooltip" role="status" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./atlas.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
