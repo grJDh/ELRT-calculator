@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101924">
+  <meta name="description" content="House Orien Lightning Rail route, travel time and fare planner for Eberron.">
+  <title>Lightning Rail Planner | House Orien</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">✦</div>
+      <div class="brand-text"><div class="eyebrow">HOUSE ORIEN PASSENGER SERVICE</div><h1>Lightning Rail Planner</h1></div>
+      <div class="top-actions"><span class="version-pill">KHORVAIRE NETWORK</span><button id="edit-network" class="button ghost">Edit network</button></div>
+    </header>
+    <main class="dashboard">
+      <section class="map-panel" aria-label="Interactive rail network map">
+        <div class="map-toolbar">
+          <div><div class="section-overline">ORIEN CARTOGRAPHY</div><h2>Rail network</h2></div>
+          <div class="source-switch" role="group" aria-label="Rail distance edition"><button data-edition="4E" class="active">4E</button><button data-edition="3E">3E</button><button data-edition="Custom">Custom</button></div>
+        </div>
+        <div class="map-shell" id="map-shell">
+          <div class="map-watermark" aria-hidden="true">KHORVAIRE</div>
+          <svg id="rail-map" viewBox="0 0 1000 700" role="img" aria-label="Interactive schematic rail map. Select a station to set journey departure."></svg>
+          <div class="map-controls"><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><button id="fit-route" title="Fit map" aria-label="Fit map">⌗</button></div>
+          <div class="map-legend"><span><i class="legend-line"></i>Railway</span><span><i class="legend-line custom"></i>Custom</span><span><i class="legend-line route"></i>Selected</span><span><i class="legend-dot"></i>Station</span></div>
+        </div>
+        <p class="map-caption">Interactive schematic map. Geography is simplified for route planning. Click a station to set the departure. Scroll to zoom, drag to pan.</p>
+      </section>
+      <aside class="sidebar">
+        <section class="panel journey-panel"><div class="section-overline">PLAN A JOURNEY</div><h2>Where to?</h2>
+          <div class="field"><label for="from">FROM · DEPARTURE STATION</label><input id="from" list="station-options" autocomplete="off" placeholder="Choose departure"></div>
+          <button id="swap" class="swap-button" aria-label="Swap departure and destination" title="Swap stations">⇅</button>
+          <div class="field"><label for="to">TO · DESTINATION STATION</label><input id="to" list="station-options" autocomplete="off" placeholder="Choose destination"></div>
+          <datalist id="station-options"></datalist>
+          <div class="journey-actions"><button id="plan" class="button primary">Find route <span aria-hidden="true">↗</span></button><button id="journey-settings" class="button subtle">Journey settings ⚙</button></div>
+          <div id="journey-settings-body" class="settings-body" hidden><div class="double-input"><div class="field"><label for="speed">Speed · mph</label><input type="number" min="1" step="1" max="200" id="speed"></div><div class="field"><label for="layover">Stopover · hours</label><input type="number" min="0" max="48" step="0.25" id="layover"></div></div></div>
+          <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+        </section>
+        <section class="panel results-panel"><div class="section-overline">SELECTED JOURNEY</div><div class="route-titles"><div><small>FROM</small><strong id="result-from">Sharn</strong></div><span class="connector-arrow">→</span><div><small>TO</small><strong id="result-to">Flamekeep</strong></div></div>
+          <div class="metrics"><div><span>DISTANCE</span><strong id="distance">—</strong><small>miles</small></div><div><span>TRAVEL TIME</span><strong id="travel-time">—</strong><small id="time-sub">including layovers</small></div><div><span>STOPS</span><strong id="stops">—</strong><small>between stations</small></div></div>
+        </section>
+        <section class="panel prices-panel"><div class="section-heading"><div><div class="section-overline">PASSENGER FARES</div><h2>Tickets</h2></div><select id="fare-filter" aria-label="Fare source"><option value="All">All sources</option><option value="5E">5E sources</option><option value="4E">4E sources</option><option value="Orien">House Orien classes</option><option value="Custom">Custom fares</option></select></div><div id="fares" class="fare-list"></div><div class="fare-footnote">Estimates only; each publication uses its own pricing method.</div></section>
+        <section class="panel itinerary-panel"><div class="section-heading"><div><div class="section-overline">ROUTE DETAILS</div><h2>Itinerary</h2></div><button id="copy-route" class="button small">Copy</button></div><div id="itinerary" class="itinerary"></div></section>
+      </aside>
+    </main>
+    <footer>HOUSE ORIEN · LIGHTNING RAIL SERVICES <span>Data source: <a href="https://github.com/grJDh/eberron-trains" rel="noopener noreferrer" target="_blank">original Eberron Trains project</a> · Reconstruction for campaign planning</span></footer>
+  </div>
+  <dialog id="editor" class="editor-dialog"><form method="dialog"><div class="modal-header"><div><div class="section-overline">CUSTOMIZE THE NETWORK</div><h2>Network editor</h2></div><button class="close" value="cancel" aria-label="Close">×</button></div></form>
+    <div class="editor-body"><p class="muted">Your custom stations and connections stay in this browser. Baseline 3E/4E lines remain unchanged.</p>
+      <div class="editor-tabs"><button class="selected" data-tab="connections">Connections</button><button data-tab="stations">Stations</button><button data-tab="fares">Custom fares</button><button data-tab="backup">Import / export</button></div>
+      <div id="tab-connections" class="tab-panel"><form id="add-connection" class="editor-form"><div class="double-input"><div class="field"><label for="conn-a">Station A</label><input required id="conn-a" list="station-options" placeholder="Station"></div><div class="field"><label for="conn-b">Station B</label><input required id="conn-b" list="station-options" placeholder="Station"></div></div><div class="double-input"><div class="field"><label for="conn-miles">Distance · miles</label><input required id="conn-miles" type="number" min="1" step="1" placeholder="e.g. 150"></div><button class="button primary" type="submit">Add connection</button></div></form><div id="connection-list" class="editor-list"></div></div>
+      <div id="tab-stations" class="tab-panel" hidden><form id="add-station" class="editor-form"><div class="field"><label for="station-name">New station name</label><input required id="station-name" placeholder="e.g. New Cyre"></div><div class="double-input"><div class="field"><label for="station-x">Map X · 0–100</label><input id="station-x" type="number" min="1" max="99" value="50"></div><div class="field"><label for="station-y">Map Y · 0–100</label><input id="station-y" type="number" min="1" max="99" value="50"></div></div><button class="button primary" type="submit">Add station</button></form><div id="station-list" class="editor-list"></div></div>
+      <div id="tab-fares" class="tab-panel" hidden><form id="add-fare" class="editor-form"><div class="double-input"><div class="field"><label for="fare-name">Fare name</label><input id="fare-name" required placeholder="e.g. Special carriage"></div><div class="field"><label for="fare-rate">GP / mile</label><input id="fare-rate" required type="number" min="0" step="0.001" placeholder="0.01"></div></div><button type="submit" class="button primary">Add fare</button></form><div id="fare-list-editor" class="editor-list"></div></div>
+      <div id="tab-backup" class="tab-panel" hidden><p class="muted">Export your edits to JSON for safekeeping or move them to another browser.</p><div class="backup-actions"><button id="export-data" class="button primary">Export JSON</button><label class="button subtle upload-label">Import JSON <input id="import-data" type="file" accept=".json,application/json" hidden></label><button id="reset-data" class="button danger">Reset custom data</button></div></div>
+      <div id="editor-feedback" class="feedback" role="status" aria-live="polite"></div>
+    </div>
+  </dialog>
+</body>
+</html>
