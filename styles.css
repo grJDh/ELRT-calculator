@@ -335,3 +335,14 @@ footer a { color: #79c7cb; }
 .station.custom .station-label { opacity: 0; }
 .atlas-detail .station.custom .station-label, .station.custom:hover .station-label, .station.custom:focus .station-label, .station.custom.on-route .station-label { opacity: 1; }
 .legend-line:not(.active):not(.custom) { background: #d5bb7b; }
+
+/* Cosmetic train */
+.train-layer { pointer-events: none; }
+.train-body { fill: #eaf8fc; stroke: #08161b; stroke-width: .6; stroke-linejoin: round; }
+.train-stripe { stroke: #1d5560; stroke-width: .7; stroke-linecap: round; stroke-dasharray: 1.1 .9; }
+.train-glow { fill: rgba(110, 205, 255, .34); }
+.train-trail { stroke: #7fdcff; stroke-linecap: round; }
+.train-ring-soft { fill: none; stroke: rgba(120, 200, 255, .5); stroke-width: 1.5; }
+.train-ring-core { fill: none; stroke: #e2f7ff; stroke-width: .6; }
+.train-bolt { stroke: rgba(214, 244, 255, .85); stroke-width: .35; stroke-linejoin: round; }
+.map-controls button:disabled { opacity: .4; cursor: default; }

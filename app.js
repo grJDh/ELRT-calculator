@@ -334,6 +334,10 @@
     // Keep the address bar shareable: opening this link plans the same journey.
     try { history.replaceState(null,"","#"+new URLSearchParams({from:start,to:end})); } catch {}
     renderJourney(); renderMap(); fitRoute();
+    // The train departs only when the route itself changes, not on every settings tweak.
+    $("trainButton").disabled=false;
+    const trainKey=journey.path.join("|");
+    if (trainKey !== lastTrainKey) { lastTrainKey=trainKey; if (!reducedMotion.matches) startTrain(); }
   }
   // Tells the user what the other route preference would change; clicking the note switches to it.
   function renderAltNote(start,end) {
@@ -347,8 +351,127 @@
       : `Shortest route saves ${miles.toLocaleString()} mi but takes ${formatDuration(hours)} longer · switch`;
   }
 
+  // ---------------------------------------------------------------------
+  // Cosmetic train: runs once along each newly planned route (replay with the ▶ map button).
+  // Each car sits on two points of the path, so the consist bends with the track.
+  // ---------------------------------------------------------------------
+  const TRAIN={cars:4,len:9,wid:3.6,gap:1.3,trail:8,corner:9};
+  const trainLayer=$("trainLayer");
+  const reducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)");
+  let trainRun=null, lastTrainKey="";
+
+  // Route as drawn on the map (same bends as the rails), with rounded corners, resampled at even steps.
+  function trainPath(journey) {
+    const rails=getRails(), raw=[], stops=[0]; let length=0;
+    for (const segment of journey.segments) {
+      const rail=rails.find(connection => edgeKey(connection[0],connection[1]) === edgeKey(segment.from,segment.to));
+      if (!rail) return null;
+      const points=trackPoints(rail[0],rail[1]).map(point => [point.x,point.y]);
+      if (rail[0] !== segment.from) points.reverse();
+      points.forEach(point => {
+        const last=raw[raw.length-1], gap=last ? Math.hypot(last[0]-point[0],last[1]-point[1]) : 1;
+        if (gap > .01) { if (last) length+=gap; raw.push(point); }
+      });
+      stops.push(length);
+    }
+    if (raw.length < 2) return null;
+    const round=[raw[0]];
+    for (let i=1; i<raw.length-1; i++) {
+      const a=raw[i-1], b=raw[i], c=raw[i+1], la=Math.hypot(a[0]-b[0],a[1]-b[1]), lc=Math.hypot(c[0]-b[0],c[1]-b[1]), d=Math.min(TRAIN.corner,la/2,lc/2);
+      const p=[b[0]+(a[0]-b[0])/la*d,b[1]+(a[1]-b[1])/la*d], q=[b[0]+(c[0]-b[0])/lc*d,b[1]+(c[1]-b[1])/lc*d];
+      for (let k=0; k<=8; k++) { const t=k/8, u=1-t; round.push([u*u*p[0]+2*u*t*b[0]+t*t*q[0],u*u*p[1]+2*u*t*b[1]+t*t*q[1]]); }
+    }
+    round.push(raw[raw.length-1]);
+    const cum=[0]; for (let i=1; i<round.length; i++) cum.push(cum[i-1]+Math.hypot(round[i][0]-round[i-1][0],round[i][1]-round[i-1][1]));
+    const len=cum[cum.length-1], n=Math.max(2,Math.round(len/1.5)+1), step=len/(n-1), xs=new Float32Array(n), ys=new Float32Array(n);
+    for (let i=0, j=0; i<n; i++) {
+      const s=Math.min(len,i*step); while (j < round.length-2 && cum[j+1] < s) j++;
+      const span=cum[j+1]-cum[j], f=span > 0 ? Math.min(1,Math.max(0,(s-cum[j])/span)) : 0;
+      xs[i]=round[j][0]+(round[j+1][0]-round[j][0])*f; ys[i]=round[j][1]+(round[j+1][1]-round[j][1])*f;
+    }
+    const at=s => { const q=Math.min(len,Math.max(0,s))/step, i=Math.min(Math.floor(q),n-2), f=q-i; return [xs[i]+(xs[i+1]-xs[i])*f,ys[i]+(ys[i+1]-ys[i])*f]; };
+    // Time → distance table: the train eases out of the first station, slows through stops and brakes at the end.
+    const scale=len/(length || 1), marks=stops.map(stop => stop*scale), size=Math.ceil(len)+1, table=new Float32Array(size); let total=0;
+    for (let i=0; i<size; i++) {
+      let pace=1;
+      marks.forEach((mark,index) => { const ends=index === 0 || index === marks.length-1, d=(i-mark)/(ends ? 16 : 11); pace=Math.min(pace,1-(ends ? .92 : .7)*Math.exp(-d*d)); });
+      table[i]=total; total+=1/pace;
+    }
+    const distanceAt=progress => {
+      if (progress >= 1) return len;
+      const target=progress*total; let lo=0, hi=size-1;
+      while (hi-lo > 1) { const mid=lo+hi>>1; if (table[mid] <= target) lo=mid; else hi=mid; }
+      return Math.min(len,lo+(target-table[lo])/((table[hi]-table[lo]) || 1));
+    };
+    return {len,at,distanceAt};
+  }
+  function buildTrainNodes() {
+    const {cars,len,wid,trail}=TRAIN, nodes={trail:[],cars:[]};
+    for (let i=0; i<trail; i++) { const line=svgElement("line",{class:"train-trail"}); nodes.trail.push(line); trainLayer.append(line); }
+    for (let k=cars-1; k>=0; k--) {
+      const car=svgElement("g",{class:"train-car"});
+      car.append(svgElement("ellipse",{class:"train-glow",rx:len*.66,ry:wid*1.15}));
+      car.append(k === 0
+        ? svgElement("path",{class:"train-body",d:`M${-len/2},${-wid/2}L${len/2-wid*.7},${-wid/2}Q${len/2+wid*.25},0 ${len/2-wid*.7},${wid/2}L${-len/2},${wid/2}Z`})
+        : svgElement("rect",{class:"train-body",x:-len/2,y:-wid/2,width:len,height:wid,rx:wid*.3}));
+      car.append(svgElement("line",{class:"train-stripe",x1:-len*.34,y1:0,x2:len*(k === 0 ? .2 : .34),y2:0}));
+      nodes.cars[k]=car; trainLayer.append(car);
+    }
+    // The bound elemental: a ring of lightning ahead of the crew car.
+    nodes.ring=svgElement("g",{class:"train-ring"});
+    nodes.ring.append(svgElement("circle",{r:wid*2.6,fill:"url(#trainAura)"}),svgElement("ellipse",{class:"train-ring-soft",rx:wid*.3,ry:wid*1.08}),svgElement("ellipse",{class:"train-ring-core",rx:wid*.3,ry:wid*1.08}));
+    nodes.bolt=svgElement("polyline",{class:"train-bolt",fill:"none"}); nodes.ring.append(nodes.bolt);
+    trainLayer.append(nodes.ring);
+    return nodes;
+  }
+  function stopTrain() { trainRun=null; trainLayer.replaceChildren(); trainLayer.removeAttribute("opacity"); }
+  function startTrain() {
+    stopTrain();
+    const path=currentJourney && trainPath(currentJourney);
+    if (!path) return;
+    // Drawn larger when the whole map is in view, so the train stays readable at any zoom.
+    const zoom=Math.min(2.8,Math.max(1.2,3.4/view.scale));
+    const run=trainRun={path,nodes:buildTrainNodes(),start:null,duration:Math.min(9,Math.max(4.5,3.5+path.len/130)),last:0,lastT:0,frame:0};
+    const {cars,trail}=TRAIN, len=TRAIN.len*zoom, wid=TRAIN.wid*zoom, gap=TRAIN.gap*zoom, deg=180/Math.PI;
+    const tick=now => {
+      if (trainRun !== run) return;
+      if (run.start === null) run.start=now;
+      const t=(now-run.start)/1000, s=path.distanceAt(Math.min(1,t/run.duration));
+      const fade=Math.min(1,t/.45)*(t > run.duration+.8 ? 1-(t-run.duration-.8)/.7 : 1);
+      if (t > run.duration && fade <= 0) return stopTrain();
+      trainLayer.setAttribute("opacity",fade.toFixed(3));
+      const dt=Math.max(.001,t-run.lastT), speed=Math.min(1.3,Math.max(0,(s-run.last)/dt/(path.len/run.duration))); run.last=s; run.lastT=t; run.frame++;
+      run.nodes.cars.forEach((car,k) => {
+        const front=s-k*(len+gap), rear=front-len;
+        if (rear < 0) return car.setAttribute("display","none");
+        const a=path.at(front), b=path.at(rear);
+        car.removeAttribute("display");
+        car.setAttribute("transform",`translate(${((a[0]+b[0])/2).toFixed(2)} ${((a[1]+b[1])/2).toFixed(2)}) rotate(${(Math.atan2(a[1]-b[1],a[0]-b[0])*deg).toFixed(1)}) scale(${zoom.toFixed(2)})`);
+      });
+      const back=s-cars*(len+gap)+gap, tail=30*zoom*(.3+.7*Math.min(1,speed));
+      run.nodes.trail.forEach((line,i) => {
+        const from=back-tail*i/trail, to=back-tail*(i+1)/trail, f=1-i/trail;
+        if (to < 0) return line.setAttribute("display","none");
+        const a=path.at(from), b=path.at(to);
+        line.removeAttribute("display");
+        line.setAttribute("x1",a[0].toFixed(2)); line.setAttribute("y1",a[1].toFixed(2)); line.setAttribute("x2",b[0].toFixed(2)); line.setAttribute("y2",b[1].toFixed(2));
+        line.setAttribute("stroke-width",(wid*(.25+.5*f)).toFixed(2)); line.setAttribute("opacity",(.5*f*f*Math.min(1,speed+.15)).toFixed(3));
+      });
+      const head=path.at(s+.6*zoom), behind=path.at(s-1.2*zoom);
+      run.nodes.ring.setAttribute("transform",`translate(${head[0].toFixed(2)} ${head[1].toFixed(2)}) rotate(${(Math.atan2(head[1]-behind[1],head[0]-behind[0])*deg).toFixed(1)}) scale(${zoom.toFixed(2)})`);
+      run.nodes.ring.setAttribute("opacity",(.72+.28*Math.sin(t*31)*Math.sin(t*17.3)).toFixed(3));
+      if (run.frame%3 === 0) {   // a short crackle of lightning off the ring
+        const angle=Math.random()*Math.PI*2; const w=TRAIN.wid; let x=Math.cos(angle)*w*.3, y=Math.sin(angle)*w*1.05; const points=[x.toFixed(2)+","+y.toFixed(2)];
+        for (let j=0; j<3; j++) { x+=(Math.random()-.65)*w*.9; y+=(Math.random()-.5)*w*.9; points.push(x.toFixed(2)+","+y.toFixed(2)); }
+        run.nodes.bolt.setAttribute("points",points.join(" "));
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
   function showError(message) {
-    currentJourney=null; $("altNote").hidden=true; els.error.textContent=message; els.error.hidden=false;
+    currentJourney=null; stopTrain(); lastTrainKey=""; $("trainButton").disabled=true; $("altNote").hidden=true; els.error.textContent=message; els.error.hidden=false;
     $("summaryFrom").textContent=els.from.value || "Choose station"; $("summaryTo").textContent=els.to.value || "Choose station";
     ["distanceValue","timeValue","stopsValue"].forEach(id=>$(id).textContent="–");
     els.routeList.replaceChildren(); els.fareList.replaceChildren(); renderMap();
@@ -819,6 +942,7 @@
   // A shared link (#from=…&to=…) overrides the default journey.
   const linked=new URLSearchParams(location.hash.slice(1));
   [["from",els.from],["to",els.to]].forEach(([key,input])=>{ const name=normalizedStation(linked.get(key) || ""); if (name) input.value=name; });
+  $("trainButton").addEventListener("click",startTrain);
   $("zoomInButton").addEventListener("click",()=>zoomAt(1.25)); $("zoomOutButton").addEventListener("click",()=>zoomAt(.8)); $("fitButton").addEventListener("click",fitRoute);
   els.svg.addEventListener("wheel",event=>{ event.preventDefault(); const point=pointerToMap(event); zoomAt(event.deltaY<0?1.14:.88,point.x,point.y,false); },{passive:false});
   els.svg.addEventListener("pointerdown",event=>{ if (event.button !== 0 || event.target.closest(".station, .rail-hit") || (networkEditing && networkPanel === "towns" && townPlacementArmed)) return; drag={clientX:event.clientX,clientY:event.clientY,x:view.x,y:view.y,moved:false}; els.svg.setPointerCapture(event.pointerId); els.svg.classList.add("dragging"); });

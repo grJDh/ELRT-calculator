@@ -111,12 +111,14 @@
               <pattern id="smallGrid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="rgba(104,145,151,.09)" stroke-width="1"/></pattern>
               <pattern id="largeGrid" width="120" height="120" patternUnits="userSpaceOnUse"><rect width="120" height="120" fill="url(#smallGrid)"/><path d="M120 0H0V120" fill="none" stroke="rgba(104,145,151,.14)" stroke-width="1"/></pattern>
               <filter id="routeGlow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <radialGradient id="trainAura"><stop offset="0" stop-color="#8fe0ff" stop-opacity=".62"/><stop offset=".4" stop-color="#46a0ff" stop-opacity=".2"/><stop offset="1" stop-color="#2878ff" stop-opacity="0"/></radialGradient>
               <filter id="pinShadow" x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#001017" flood-opacity=".65"/></filter>
             </defs>
             <rect width="1200" height="760" fill="url(#largeGrid)"/>
             <g id="mapViewport">
               <image href="./atlas.svg" width="1200" height="760" pointer-events="none"/>
               <g id="railLines" class="rail-lines"></g>
+              <g id="trainLayer" class="train-layer" aria-hidden="true"></g>
               <g id="stationLayer" class="station-layer"></g>
             </g>
           </svg>
@@ -124,6 +126,7 @@
           <div class="map-controls" aria-label="Map controls">
             <button id="zoomInButton" type="button" aria-label="Zoom in">+</button>
             <button id="zoomOutButton" type="button" aria-label="Zoom out">−</button>
+            <button id="trainButton" type="button" aria-label="Replay the train along the route" title="Replay the train" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg></button>
             <button id="fitButton" type="button" aria-label="Fit route on map" title="Fit route"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button>
           </div>
 
