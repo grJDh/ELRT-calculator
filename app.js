@@ -44,7 +44,7 @@
   });
   BASE_STATIONS.Thaliost.l=[-7,-7,"end"];
   BASE_STATIONS["First Tower"].l=[7,10,"start"];
-  const DEFAULTS = {speed:30,layover:1,routeMode:"fastest",fares:[],connections:[],disabledConnections:[],customStations:[]};
+  const DEFAULTS = {speed:30,layover:1,routeMode:"fastest",passengers:1,fares:[],connections:[],disabledConnections:[],customStations:[]};
   // localStorage can be unavailable (private mode, blocked site data) or full; never let that break the app.
   const STORAGE_KEY="lightningRailSettings";
   function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
@@ -133,6 +133,7 @@
       speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
       layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
       routeMode:saved.routeMode === "shortest" ? "shortest" : "fastest",
+      passengers:Math.min(999,Math.max(1,Math.floor(Number(saved.passengers)) || 1)),
       fares,
       connections:savedConnections.map(([from,to,miles]) => [from,to,Number(miles)]),
       disabledConnections:Array.isArray(saved.disabledConnections) ? [...new Set(saved.disabledConnections.filter(key => typeof key === "string" && isBuiltInEdge(key)))] : [],
@@ -330,11 +331,25 @@
     const journey=shortestPath(start,end);
     if (!journey) return showError(`No active lightning rail route connects ${start} and ${end}.`);
     currentJourney={...journey,start,end};
+    renderAltNote(start,end);
+    // Keep the address bar shareable: opening this link plans the same journey.
+    try { history.replaceState(null,"","#"+new URLSearchParams({from:start,to:end})); } catch {}
     renderJourney(); renderMap(); fitRoute();
+  }
+  // Tells the user what the other route preference would change; clicking the note switches to it.
+  function renderAltNote(start,end) {
+    const note=$("altNote"), shortestNow=settings.routeMode === "shortest";
+    const other=shortestPath(start,end,shortestNow ? "fastest" : "shortest");
+    const miles=other ? Math.abs(other.distance-currentJourney.distance) : 0, hours=other ? Math.abs(other.hours-currentJourney.hours) : 0;
+    note.hidden=!(miles > 1e-9 || hours > 1e-9);
+    if (note.hidden) return;
+    note.textContent=shortestNow
+      ? `Fastest route is ${formatDuration(hours)} quicker but ${miles.toLocaleString()} mi longer · switch`
+      : `Shortest route saves ${miles.toLocaleString()} mi but takes ${formatDuration(hours)} longer · switch`;
   }
 
   function showError(message) {
-    currentJourney=null; els.error.textContent=message; els.error.hidden=false;
+    currentJourney=null; $("altNote").hidden=true; els.error.textContent=message; els.error.hidden=false;
     $("summaryFrom").textContent=els.from.value || "Choose station"; $("summaryTo").textContent=els.to.value || "Choose station";
     ["distanceValue","timeValue","stopsValue"].forEach(id=>$(id).textContent="–");
     els.routeList.replaceChildren(); els.fareList.replaceChildren(); renderMap();
@@ -358,13 +373,12 @@
 
   function renderFares() {
     if (!currentJourney) return els.fareList.replaceChildren();
-    const filter=els.fareFilter.value;
-    const custom=settings.fares.map(fare => ({...fare,source:"custom",sourceName:fare.name || "Custom fare"}));
-    const fares=[...BASE_FARES,...custom].filter(fare => filter === "all" || fare.source === filter);
+    const fares=visibleFares();
     els.fareList.replaceChildren(...fares.map(fare => {
       const item=document.createElement("article"); item.className=`fare-item${fare.source === "custom" ? " custom" : ""}`;
       const basis=fare.basis === "mile" ? `${fare.price} gp per mile` : fare.basis === "hour" ? `${fare.price} gp per hour` : `${fare.price} gp per day`;
-      item.innerHTML=`<div class="fare-name"><strong>${escapeHtml(fare.tier)}</strong><span>${escapeHtml(fare.sourceName)} · ${basis}</span></div><div class="money"><b>${formatMoney(calculateFare(fare,currentJourney))}</b><small>estimated fare</small></div>`;
+      const each=ticketPrice(fare), party=settings.passengers;
+      item.innerHTML=`<div class="fare-name"><strong>${escapeHtml(fare.tier)}</strong><span>${escapeHtml(fare.sourceName)} · ${basis}</span></div><div class="money"><b>${formatMoney(each*party)}</b><small>${party > 1 ? `${party} passengers · ${formatMoney(each)} each` : "estimated fare"}</small></div>`;
       return item;
     }));
     if (!fares.length) {
@@ -372,6 +386,12 @@
     }
   }
 
+  // One ticket, rounded to whole copper so that party totals are exact multiples.
+  function ticketPrice(fare) { return Math.round(calculateFare(fare,currentJourney)*100)/100; }
+  function visibleFares() {
+    const filter=els.fareFilter.value;
+    return [...BASE_FARES,...settings.fares.map(fare => ({...fare,source:"custom",sourceName:fare.name || "Custom fare"}))].filter(fare => filter === "all" || fare.source === filter);
+  }
   function calculateFare(fare,journey) {
     const price=Number(fare.price) || 0;
     if (fare.basis === "mile") return journey.distance*price;
@@ -400,11 +420,11 @@
     view.x=Math.min(pad,Math.max(1200-1200*view.scale-pad,view.x));
     view.y=Math.min(pad,Math.max(760-760*view.scale-pad,view.y));
   }
-  function zoomAt(factor,cx=600,cy=380) {
+  function zoomAt(factor,cx=600,cy=380,animate=true) {
     const next=Math.min(8,Math.max(1,view.scale*factor));
     const ratio=next/view.scale;
     view.x=cx-(cx-view.x)*ratio; view.y=cy-(cy-view.y)*ratio; view.scale=next;
-    clampView(); updateTransform();
+    clampView(); updateTransform(animate);
   }
   function fitRoute() {
     if (!currentJourney) { view={scale:1,x:0,y:0}; return updateTransform(); }
@@ -753,7 +773,7 @@
     storageSet("lightningRailSettingsBeforeImport",JSON.stringify(settings));
     settings=imported; persistSettings();
     resetTownEditor(); $("showCustom").checked=settings.showCustom !== false;
-    setRouteMode(settings.routeMode); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
+    setRouteMode(settings.routeMode); $("partySize").value=settings.passengers; refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
     toast("Backup imported");
   });
   $("settingsButton").addEventListener("click",openSettings); $("addFare").addEventListener("click",()=>addFareRow());
@@ -780,11 +800,36 @@
   });
   $("copyButton").addEventListener("click",async()=>{
     if (!currentJourney) return;
-    const text=`${currentJourney.start} to ${currentJourney.end}\n${currentJourney.distance} miles · ${formatDuration(currentJourney.hours)}\n${currentJourney.path.join(" → ")}`;
-    try { await navigator.clipboard.writeText(text); toast("Itinerary copied"); } catch { toast("Could not copy itinerary"); }
+    const j=currentJourney, party=settings.passengers, stops=Math.max(0,j.path.length-2);
+    const lines=[
+      `${j.start} to ${j.end} (${settings.routeMode} route)`,
+      `${j.distance.toLocaleString()} miles · ${formatDuration(j.hours)} · ${stops} ${stops === 1 ? "stop" : "stops"}`,
+      "",
+      ...j.segments.map(segment => `${segment.from} → ${segment.to}: ${segment.distance.toLocaleString()} mi`),
+      "",
+      party > 1 ? `Fares for ${party} passengers:` : "Fares:",
+      ...visibleFares().map(fare => `${fare.tier} (${fare.sourceName}): ${formatMoney(ticketPrice(fare)*party)}${party > 1 ? ` (${formatMoney(ticketPrice(fare))} each)` : ""}`),
+      "",
+      location.href
+    ];
+    try { await navigator.clipboard.writeText(lines.join("\n")); toast("Itinerary copied"); } catch { toast("Could not copy itinerary"); }
   });
+  $("copyLinkButton").addEventListener("click",async()=>{
+    try { await navigator.clipboard.writeText(location.href); toast("Link to this journey copied"); } catch { toast("Could not copy link"); }
+  });
+  $("altNote").addEventListener("click",()=>$(settings.routeMode === "shortest" ? "modeFastest" : "modeShortest").click());
+  $("partySize").value=settings.passengers;
+  $("partySize").addEventListener("input",()=>{
+    const value=Math.floor(Number($("partySize").value));
+    if (!(value >= 1)) return; // let the user finish typing
+    settings.passengers=Math.min(999,value); persistSettings(); renderFares();
+  });
+  $("partySize").addEventListener("change",()=>{ $("partySize").value=settings.passengers; });
+  // A shared link (#from=…&to=…) overrides the default journey.
+  const linked=new URLSearchParams(location.hash.slice(1));
+  [["from",els.from],["to",els.to]].forEach(([key,input])=>{ const name=normalizedStation(linked.get(key) || ""); if (name) input.value=name; });
   $("zoomInButton").addEventListener("click",()=>zoomAt(1.25)); $("zoomOutButton").addEventListener("click",()=>zoomAt(.8)); $("fitButton").addEventListener("click",fitRoute);
-  els.svg.addEventListener("wheel",event=>{ event.preventDefault(); const point=pointerToMap(event); zoomAt(event.deltaY<0?1.14:.88,point.x,point.y); },{passive:false});
+  els.svg.addEventListener("wheel",event=>{ event.preventDefault(); const point=pointerToMap(event); zoomAt(event.deltaY<0?1.14:.88,point.x,point.y,false); },{passive:false});
   els.svg.addEventListener("pointerdown",event=>{ if (event.button !== 0 || event.target.closest(".station, .rail-hit") || (networkEditing && networkPanel === "towns" && townPlacementArmed)) return; drag={clientX:event.clientX,clientY:event.clientY,x:view.x,y:view.y,moved:false}; els.svg.setPointerCapture(event.pointerId); els.svg.classList.add("dragging"); });
   els.svg.addEventListener("pointermove",event=>{ if (!drag) return; if (Math.hypot(event.clientX-drag.clientX,event.clientY-drag.clientY)>4) drag.moved=true; const rect=els.svg.getBoundingClientRect(); view.x=drag.x+(event.clientX-drag.clientX)*1200/rect.width; view.y=drag.y+(event.clientY-drag.clientY)*760/rect.height; clampView(); updateTransform(false); });
   els.svg.addEventListener("pointerup",event=>{ if (!drag) return; suppressMapClick=drag.moved; drag=null; els.svg.releasePointerCapture(event.pointerId); els.svg.classList.remove("dragging"); setTimeout(()=>{ suppressMapClick=false; },0); });

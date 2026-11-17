@@ -150,6 +150,7 @@
               <button id="modeFastest" class="active" type="button" aria-pressed="true" title="Least travel time, layovers included">Fastest</button>
               <button id="modeShortest" type="button" aria-pressed="false" title="Fewest miles; cheapest on per-mile fares">Shortest</button>
             </div>
+            <button id="altNote" class="alt-note" type="button" hidden></button>
             <div class="summary-metrics">
               <article><span>Distance</span><strong id="distanceValue">-</strong><small>miles</small></article>
               <article><span>Travel time</span><strong id="timeValue">-</strong><small id="timeNote">including stops</small></article>
@@ -164,13 +165,14 @@
                 <option value="all">All sources</option><option value="erlw">Rising from the Last War</option><option value="wgte">Wayfinder's Guide</option><option value="ecg">Eberron Campaign Guide</option><option value="custom">Custom fares</option>
               </select>
             </div>
+            <label class="party-row"><span>Passengers</span><input id="partySize" type="number" min="1" max="999" step="1" value="1" inputmode="numeric"></label>
             <div id="fareList" class="fare-list"></div>
           </section>
 
           <details class="detail-section itinerary-section" open>
             <summary><span><span class="eyebrow">Route details</span><strong>Itinerary</strong></span><span class="chevron">⌄</span></summary>
             <ol id="routeList" class="route-list"></ol>
-            <button class="text-button" id="copyButton" type="button">Copy itinerary</button>
+            <div class="copy-actions"><button class="text-button" id="copyButton" type="button">Copy itinerary</button><button class="text-button" id="copyLinkButton" type="button">Copy link</button></div>
           </details>
         </div>
       </aside>
