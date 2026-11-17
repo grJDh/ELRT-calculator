@@ -198,6 +198,11 @@
           </div>
         </section>
         <section class="settings-section">
+          <h3>Train animation</h3>
+          <label class="toggle-row"><input id="trainLoopInput" type="checkbox"><span><b>Loop the journey</b><small>The train starts over from the first station after it arrives.</small></span></label>
+          <label class="toggle-row"><input id="trainStopsInput" type="checkbox" checked><span><b>Stop at every station</b><small>Off: the train runs straight through to the destination.</small></span></label>
+        </section>
+        <section class="settings-section">
           <div class="settings-title"><div><h3>Custom fares</h3><p>Add campaign-specific ticket classes. Custom rail connections are managed directly on the map.</p></div></div>
           <div id="fareRows" class="editor-list"></div>
           <p id="settingsError" class="network-error" role="alert" hidden></p>

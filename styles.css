@@ -346,3 +346,7 @@ footer a { color: #79c7cb; }
 .train-ring-core { fill: none; stroke: #e2f7ff; stroke-width: .6; }
 .train-bolt { stroke: rgba(214, 244, 255, .85); stroke-width: .35; stroke-linejoin: round; }
 .map-controls button:disabled { opacity: .4; cursor: default; }
+.toggle-row { display: flex; align-items: flex-start; gap: 11px; padding: 7px 0; cursor: pointer; }
+.toggle-row input { flex: none; width: 17px; height: 17px; margin: 2px 0 0; accent-color: #b8892f; }
+.toggle-row b { display: block; font-size: .9rem; font-weight: 700; }
+.toggle-row small { display: block; margin-top: 2px; color: #798589; font-size: .76rem; line-height: 1.35; }

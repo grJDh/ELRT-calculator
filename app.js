@@ -44,7 +44,7 @@
   });
   BASE_STATIONS.Thaliost.l=[-7,-7,"end"];
   BASE_STATIONS["First Tower"].l=[7,10,"start"];
-  const DEFAULTS = {speed:30,layover:1,routeMode:"fastest",fares:[],connections:[],disabledConnections:[],customStations:[]};
+  const DEFAULTS = {speed:30,layover:1,routeMode:"fastest",trainLoop:false,trainStops:true,fares:[],connections:[],disabledConnections:[],customStations:[]};
   // localStorage can be unavailable (private mode, blocked site data) or full; never let that break the app.
   const STORAGE_KEY="lightningRailSettings";
   function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
@@ -133,6 +133,7 @@
       speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
       layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
       routeMode:saved.routeMode === "shortest" ? "shortest" : "fastest",
+      trainLoop:saved.trainLoop === true,trainStops:saved.trainStops !== false,
       fares,
       connections:savedConnections.map(([from,to,miles]) => [from,to,Number(miles)]),
       disabledConnections:Array.isArray(saved.disabledConnections) ? [...new Set(saved.disabledConnections.filter(key => typeof key === "string" && isBuiltInEdge(key)))] : [],
@@ -355,13 +356,13 @@
   // Cosmetic train: runs once along each newly planned route (replay with the ▶ map button).
   // Each car sits on two points of the path, so the consist bends with the track.
   // ---------------------------------------------------------------------
-  const TRAIN={cars:4,len:9,wid:3.6,gap:1.3,trail:8,corner:9};
+  const TRAIN={cars:4,len:9,wid:3.6,gap:1.3,trail:8,corner:9,dwell:.7,loopPause:.6};
   const trainLayer=$("trainLayer");
   const reducedMotion=window.matchMedia("(prefers-reduced-motion: reduce)");
   let trainRun=null, lastTrainKey="";
 
   // Route as drawn on the map (same bends as the rails), with rounded corners, resampled at even steps.
-  function trainPath(journey) {
+  function trainPath(journey,stopAtStations) {
     const rails=getRails(), raw=[], stops=[0]; let length=0;
     for (const segment of journey.segments) {
       const rail=rails.find(connection => edgeKey(connection[0],connection[1]) === edgeKey(segment.from,segment.to));
@@ -390,20 +391,28 @@
       xs[i]=round[j][0]+(round[j+1][0]-round[j][0])*f; ys[i]=round[j][1]+(round[j+1][1]-round[j][1])*f;
     }
     const at=s => { const q=Math.min(len,Math.max(0,s))/step, i=Math.min(Math.floor(q),n-2), f=q-i; return [xs[i]+(xs[i+1]-xs[i])*f,ys[i]+(ys[i+1]-ys[i])*f]; };
-    // Time → distance table: the train eases out of the first station, slows through stops and brakes at the end.
-    const scale=len/(length || 1), marks=stops.map(stop => stop*scale), size=Math.ceil(len)+1, table=new Float32Array(size); let total=0;
+    // Time → distance table: the train eases out of the first station and brakes at the end.
+    // With stopAtStations it also brakes into every intermediate station and stands there for TRAIN.dwell seconds.
+    const scale=len/(length || 1), marks=stops.map(stop => stop*scale), size=Math.ceil(len)+1, table=new Float32Array(size);
+    const halts=stopAtStations ? marks.slice(1,-1) : [], ends=[marks[0],marks[marks.length-1]];
+    const pace=new Float32Array(size); let moving=0;
     for (let i=0; i<size; i++) {
-      let pace=1;
-      marks.forEach((mark,index) => { const ends=index === 0 || index === marks.length-1, d=(i-mark)/(ends ? 16 : 11); pace=Math.min(pace,1-(ends ? .92 : .7)*Math.exp(-d*d)); });
-      table[i]=total; total+=1/pace;
+      let p=1;
+      ends.forEach(mark => { const d=(i-mark)/16; p=Math.min(p,1-.92*Math.exp(-d*d)); });
+      halts.forEach(mark => { const d=(i-mark)/13; p=Math.min(p,1-.94*Math.exp(-d*d)); });
+      pace[i]=p; moving+=1/p;
     }
+    const travel=Math.min(9,Math.max(4.5,3.5+len/130)), duration=travel+halts.length*TRAIN.dwell;
+    const dwellUnits=moving*TRAIN.dwell/travel, dwellAt=new Set(halts.map(mark => Math.min(size-2,Math.round(mark))));
+    let total=0;
+    for (let i=0; i<size; i++) { table[i]=total; total+=1/pace[i]; if (dwellAt.has(i)) total+=dwellUnits; }
     const distanceAt=progress => {
       if (progress >= 1) return len;
       const target=progress*total; let lo=0, hi=size-1;
       while (hi-lo > 1) { const mid=lo+hi>>1; if (table[mid] <= target) lo=mid; else hi=mid; }
       return Math.min(len,lo+(target-table[lo])/((table[hi]-table[lo]) || 1));
     };
-    return {len,at,distanceAt};
+    return {len,at,distanceAt,duration};
   }
   function buildTrainNodes() {
     const {cars,len,wid,trail}=TRAIN, nodes={trail:[],cars:[]};
@@ -427,18 +436,23 @@
   function stopTrain() { trainRun=null; trainLayer.replaceChildren(); trainLayer.removeAttribute("opacity"); }
   function startTrain() {
     stopTrain();
-    const path=currentJourney && trainPath(currentJourney);
+    const path=currentJourney && trainPath(currentJourney,settings.trainStops);
     if (!path) return;
     // Drawn larger when the whole map is in view, so the train stays readable at any zoom.
     const zoom=Math.min(2.8,Math.max(1.2,3.4/view.scale));
-    const run=trainRun={path,nodes:buildTrainNodes(),start:null,duration:Math.min(9,Math.max(4.5,3.5+path.len/130)),last:0,lastT:0,frame:0};
+    const run=trainRun={path,nodes:buildTrainNodes(),start:null,duration:path.duration,last:0,lastT:0,frame:0};
     const {cars,trail}=TRAIN, len=TRAIN.len*zoom, wid=TRAIN.wid*zoom, gap=TRAIN.gap*zoom, deg=180/Math.PI;
     const tick=now => {
       if (trainRun !== run) return;
       if (run.start === null) run.start=now;
       const t=(now-run.start)/1000, s=path.distanceAt(Math.min(1,t/run.duration));
       const fade=Math.min(1,t/.45)*(t > run.duration+.8 ? 1-(t-run.duration-.8)/.7 : 1);
-      if (t > run.duration && fade <= 0) return stopTrain();
+      if (t > run.duration && fade <= 0) {
+        if (!settings.trainLoop) return stopTrain();
+        // Looping: after a short pause off-screen the train departs again from the first station.
+        if (t > run.duration+1.5+TRAIN.loopPause) { run.start=now; run.last=0; run.lastT=0; }
+        trainLayer.setAttribute("opacity","0"); return requestAnimationFrame(tick);
+      }
       trainLayer.setAttribute("opacity",fade.toFixed(3));
       const dt=Math.max(.001,t-run.lastT), speed=Math.min(1.3,Math.max(0,(s-run.last)/dt/(path.len/run.duration))); run.last=s; run.lastT=t; run.frame++;
       run.nodes.cars.forEach((car,k) => {
@@ -832,6 +846,7 @@
   }
   function openSettings() {
     els.speed.value=settings.speed; els.layover.value=settings.layover;
+    $("trainLoopInput").checked=settings.trainLoop; $("trainStopsInput").checked=settings.trainStops;
     els.fareRows.replaceChildren(); settings.fares.forEach(addFareRow); $("settingsError").hidden=true; els.dialog.showModal();
   }
   function saveSettings() {
@@ -849,8 +864,10 @@
       fares.push({name,tier,price,basis:field("basis").value});
     }
     $("settingsError").hidden=true;
-    settings={...settings,speed:Math.max(1,Number(els.speed.value)||30),layover:Math.max(0,Number(els.layover.value)||0),fares};
+    const trainLoop=$("trainLoopInput").checked, trainStops=$("trainStopsInput").checked, trainChanged=trainLoop !== settings.trainLoop || trainStops !== settings.trainStops;
+    settings={...settings,speed:Math.max(1,Number(els.speed.value)||30),layover:Math.max(0,Number(els.layover.value)||0),fares,trainLoop,trainStops};
     persistSettings(); els.dialog.close(); planJourney(); toast("Journey settings saved");
+    if (trainChanged && currentJourney) startTrain(); // show the new train behaviour straight away
   }
 
   els.fromMode.addEventListener("click",()=>setActiveField("from")); els.toMode.addEventListener("click",()=>setActiveField("to"));
@@ -916,7 +933,7 @@
   $("resetNetwork").addEventListener("click",()=>{
     if (!window.confirm("Reset towns and railways to atlas defaults?\n\nYour own towns, connections and removals will be lost. Fares, speed and layover are kept.")) return;
     storageSet("lightningRailSettingsBeforeReset",JSON.stringify(settings));
-    settings={...seededDefaults(),speed:settings.speed,layover:settings.layover,fares:settings.fares,routeMode:settings.routeMode}; persistSettings();
+    settings={...seededDefaults(),speed:settings.speed,layover:settings.layover,fares:settings.fares,routeMode:settings.routeMode,trainLoop:settings.trainLoop,trainStops:settings.trainStops}; persistSettings();
     resetTownEditor(); $("showCustom").checked=true; refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas network restored");
   });
   $("copyButton").addEventListener("click",async()=>{

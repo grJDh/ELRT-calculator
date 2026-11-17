@@ -17,7 +17,7 @@ No build step or dependencies are required. Serve this directory using any stati
 
 ## Features and data
 
-Route planning with a Fastest / Shortest switch (fastest counts travel time plus a layover at every intermediate stop; shortest counts miles), 4E map baseline distances, configurable fares and speed, a cosmetic lightning-rail train that runs along each new route (replay button on the map; off under prefers-reduced-motion), shareable journey links (#from=…&to=…), custom towns and connections, edit/remove controls, right-click / long-press map actions and network backup export and import. The Thaliost–Rekkenmark bridge is broken and excluded from routing by default.
+Route planning with a Fastest / Shortest switch (fastest counts travel time plus a layover at every intermediate stop; shortest counts miles), 4E map baseline distances, configurable fares and speed, a cosmetic lightning-rail train that runs along each new route (optional loop, stop at every station or run straight through; replay button on the map; off under prefers-reduced-motion), shareable journey links (#from=…&to=…), custom towns and connections, edit/remove controls, right-click / long-press map actions and network backup export and import. The Thaliost–Rekkenmark bridge is broken and excluded from routing by default.
 
 Additional reference-map towns and railways are in the Custom collection and can be edited, removed or excluded from display and routing. Unverified does not necessarily mean non-canon. See ATLAS-NOTES.md for limitations.
 
