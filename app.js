@@ -44,7 +44,7 @@
   });
   BASE_STATIONS.Thaliost.l=[-7,-7,"end"];
   BASE_STATIONS["First Tower"].l=[7,10,"start"];
-  const DEFAULTS = {speed:30,layover:1,routeMode:"fastest",trainLoop:false,trainStops:true,fares:[],connections:[],disabledConnections:[],customStations:[]};
+  const DEFAULTS = {speed:30,layover:1,trainLoop:false,trainStops:true,fares:[],connections:[],disabledConnections:[],customStations:[]};
   // localStorage can be unavailable (private mode, blocked site data) or full; never let that break the app.
   const STORAGE_KEY="lightningRailSettings";
   function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
@@ -132,7 +132,6 @@
     return {
       speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
       layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
-      routeMode:saved.routeMode === "shortest" ? "shortest" : "fastest",
       trainLoop:saved.trainLoop === true,trainStops:saved.trainStops !== false,
       fares,
       connections:savedConnections.map(([from,to,miles]) => [from,to,Number(miles)]),
@@ -195,7 +194,7 @@
 
   // Each leg takes miles / speed, plus a layover whenever the train passes through a stop.
   // "fastest" minimises hours (ties: fewer miles); "shortest" minimises miles (ties: fewer hours).
-  function shortestPath(start,end,mode=settings.routeMode) {
+  function shortestPath(start,end,mode="fastest") {
     const graph = makeGraph();
     if (!graph[start] || !graph[end]) return null;
     const speed=settings.speed > 0 ? settings.speed : DEFAULTS.speed, layover=settings.layover >= 0 ? settings.layover : 0;
@@ -330,8 +329,10 @@
     if (start === end) return showError("Choose two different stations.");
     const journey=shortestPath(start,end);
     if (!journey) return showError(`No active lightning rail route connects ${start} and ${end}.`);
-    currentJourney={...journey,start,end};
-    renderAltNote(start,end);
+    // The planned route is always the fastest. The fewest-miles route is kept only if it differs:
+    // per-mile fares can be cheaper on it (per-day/hour fares are always cheapest on the fastest route).
+    const fewestMiles=shortestPath(start,end,"shortest");
+    currentJourney={...journey,start,end,alternative:fewestMiles && fewestMiles.path.join("|") !== journey.path.join("|") ? fewestMiles : null};
     // Keep the address bar shareable: opening this link plans the same journey.
     try { history.replaceState(null,"","#"+new URLSearchParams({from:start,to:end})); } catch {}
     renderJourney(); renderMap(); fitRoute();
@@ -339,17 +340,6 @@
     $("trainButton").disabled=false;
     const trainKey=journey.path.join("|");
     if (trainKey !== lastTrainKey) { lastTrainKey=trainKey; if (!reducedMotion.matches) startTrain(); }
-  }
-  // Tells the user what the other route preference would change; clicking the note switches to it.
-  function renderAltNote(start,end) {
-    const note=$("altNote"), shortestNow=settings.routeMode === "shortest";
-    const other=shortestPath(start,end,shortestNow ? "fastest" : "shortest");
-    const miles=other ? Math.abs(other.distance-currentJourney.distance) : 0, hours=other ? Math.abs(other.hours-currentJourney.hours) : 0;
-    note.hidden=!(miles > 1e-9 || hours > 1e-9);
-    if (note.hidden) return;
-    note.textContent=shortestNow
-      ? `Fastest route is ${formatDuration(hours)} quicker but ${miles.toLocaleString()} mi longer · switch`
-      : `Shortest route saves ${miles.toLocaleString()} mi but takes ${formatDuration(hours)} longer · switch`;
   }
 
   // ---------------------------------------------------------------------
@@ -485,7 +475,7 @@
   }
 
   function showError(message) {
-    currentJourney=null; stopTrain(); lastTrainKey=""; $("trainButton").disabled=true; $("altNote").hidden=true; els.error.textContent=message; els.error.hidden=false;
+    currentJourney=null; stopTrain(); lastTrainKey=""; $("trainButton").disabled=true; els.error.textContent=message; els.error.hidden=false;
     $("summaryFrom").textContent=els.from.value || "Choose station"; $("summaryTo").textContent=els.to.value || "Choose station";
     ["distanceValue","timeValue","stopsValue"].forEach(id=>$(id).textContent="–");
     els.routeList.replaceChildren(); els.fareList.replaceChildren(); renderMap();
@@ -513,7 +503,9 @@
     els.fareList.replaceChildren(...fares.map(fare => {
       const item=document.createElement("article"); item.className=`fare-item${fare.source === "custom" ? " custom" : ""}`;
       const basis=fare.basis === "mile" ? `${fare.price} gp per mile` : fare.basis === "hour" ? `${fare.price} gp per hour` : `${fare.price} gp per day`;
-      item.innerHTML=`<div class="fare-name"><strong>${escapeHtml(fare.tier)}</strong><span>${escapeHtml(fare.sourceName)} · ${basis}</span></div><div class="money"><b>${formatMoney(ticketPrice(fare))}</b><small>estimated fare</small></div>`;
+      const cheaper=cheaperOption(fare);
+      item.innerHTML=`<div class="fare-name"><strong>${escapeHtml(fare.tier)}</strong><span>${escapeHtml(fare.sourceName)} · ${basis}</span></div><div class="money"><b>${formatMoney(ticketPrice(fare))}</b><small>estimated fare</small></div>`
+        +(cheaper ? `<p class="fare-alt">Cheaper via ${escapeHtml(cheaper.via)}: <b>${formatMoney(cheaper.price)}</b> · saves ${formatMoney(cheaper.saves)} · +${formatDuration(cheaper.extraHours)}</p>` : "");
       return item;
     }));
     if (!fares.length) {
@@ -522,7 +514,16 @@
   }
 
   // One ticket, rounded to whole copper.
-  function ticketPrice(fare) { return Math.round(calculateFare(fare,currentJourney)*100)/100; }
+  function ticketPrice(fare,journey=currentJourney) { return Math.round(calculateFare(fare,journey)*100)/100; }
+  // The same ticket on the fewest-miles route, when that route is cheaper for this fare.
+  function cheaperOption(fare) {
+    const other=currentJourney && currentJourney.alternative;
+    if (!other) return null;
+    const price=ticketPrice(fare,other), now=ticketPrice(fare);
+    if (!(price < now)) return null;
+    const via=other.path.slice(1,-1).find(name => !currentJourney.path.includes(name)) || other.path[1];
+    return {price,saves:Math.round((now-price)*100)/100,extraHours:other.hours-currentJourney.hours,via};
+  }
   function visibleFares() {
     const filter=els.fareFilter.value;
     return [...BASE_FARES,...settings.fares.map(fare => ({...fare,source:"custom",sourceName:fare.name || "Custom fare"}))].filter(fare => filter === "all" || fare.source === filter);
@@ -911,20 +912,13 @@
     storageSet("lightningRailSettingsBeforeImport",JSON.stringify(settings));
     settings=imported; persistSettings();
     resetTownEditor(); $("showCustom").checked=settings.showCustom !== false;
-    setRouteMode(settings.routeMode); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
+    refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
     toast("Backup imported");
   });
   $("settingsButton").addEventListener("click",openSettings); $("addFare").addEventListener("click",()=>addFareRow());
   // Enter in any field saves; the close button no longer acts as the form's default button.
   els.dialog.querySelector("form").addEventListener("submit",event=>{ event.preventDefault(); saveSettings(); });
   $("closeSettings").addEventListener("click",()=>els.dialog.close());
-  const setRouteMode=mode=>{
-    settings.routeMode=mode === "shortest" ? "shortest" : "fastest";
-    [["modeFastest","fastest"],["modeShortest","shortest"]].forEach(([id,value])=>{ $(id).classList.toggle("active",settings.routeMode === value); $(id).setAttribute("aria-pressed",String(settings.routeMode === value)); });
-  };
-  $("modeFastest").addEventListener("click",()=>{ setRouteMode("fastest"); persistSettings(); planJourney(); });
-  $("modeShortest").addEventListener("click",()=>{ setRouteMode("shortest"); persistSettings(); planJourney(); });
-  setRouteMode(settings.routeMode);
   $("resetSettings").addEventListener("click",()=>{
     if (!window.confirm("Reset rail speed, layover and custom fares to defaults?\n\nYour towns and railways are kept.")) return;
     settings={...settings,speed:DEFAULTS.speed,layover:DEFAULTS.layover,fares:[]}; persistSettings();
@@ -933,20 +927,23 @@
   $("resetNetwork").addEventListener("click",()=>{
     if (!window.confirm("Reset towns and railways to atlas defaults?\n\nYour own towns, connections and removals will be lost. Fares, speed and layover are kept.")) return;
     storageSet("lightningRailSettingsBeforeReset",JSON.stringify(settings));
-    settings={...seededDefaults(),speed:settings.speed,layover:settings.layover,fares:settings.fares,routeMode:settings.routeMode,trainLoop:settings.trainLoop,trainStops:settings.trainStops}; persistSettings();
+    settings={...seededDefaults(),speed:settings.speed,layover:settings.layover,fares:settings.fares,trainLoop:settings.trainLoop,trainStops:settings.trainStops}; persistSettings();
     resetTownEditor(); $("showCustom").checked=true; refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas network restored");
   });
   $("copyButton").addEventListener("click",async()=>{
     if (!currentJourney) return;
     const j=currentJourney, stops=Math.max(0,j.path.length-2);
     const lines=[
-      `${j.start} to ${j.end} (${settings.routeMode} route)`,
+      `${j.start} to ${j.end} (fastest route)`,
       `${j.distance.toLocaleString()} miles · ${formatDuration(j.hours)} · ${stops} ${stops === 1 ? "stop" : "stops"}`,
       "",
       ...j.segments.map(segment => `${segment.from} → ${segment.to}: ${segment.distance.toLocaleString()} mi`),
       "",
       "Fares per passenger:",
-      ...visibleFares().map(fare => `${fare.tier} (${fare.sourceName}): ${formatMoney(ticketPrice(fare))}`),
+      ...visibleFares().map(fare => {
+        const cheaper=cheaperOption(fare);
+        return `${fare.tier} (${fare.sourceName}): ${formatMoney(ticketPrice(fare))}`+(cheaper ? ` (via ${cheaper.via}: ${formatMoney(cheaper.price)}, +${formatDuration(cheaper.extraHours)})` : "");
+      }),
       "",
       location.href
     ];
@@ -955,7 +952,6 @@
   $("copyLinkButton").addEventListener("click",async()=>{
     try { await navigator.clipboard.writeText(location.href); toast("Link to this journey copied"); } catch { toast("Could not copy link"); }
   });
-  $("altNote").addEventListener("click",()=>$(settings.routeMode === "shortest" ? "modeFastest" : "modeShortest").click());
   // A shared link (#from=…&to=…) overrides the default journey.
   const linked=new URLSearchParams(location.hash.slice(1));
   [["from",els.from],["to",els.to]].forEach(([key,input])=>{ const name=normalizedStation(linked.get(key) || ""); if (name) input.value=name; });

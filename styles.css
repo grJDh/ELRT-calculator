@@ -184,13 +184,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .summary-route span { display: block; margin-bottom: 4px; color: #86a0a4; font-size: .65rem; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
 .summary-route strong { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 1.3rem; font-weight: 500; line-height: 1.1; }
 .summary-route svg { width: 24px; fill: none; stroke: var(--gold); stroke-width: 1.6; stroke-linecap: round; }
-.route-pref { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 20px; padding: 4px; border: 1px solid rgba(255, 255, 255, .12); border-radius: 6px; background: rgba(7, 22, 29, .55); }
-.route-pref button { min-height: 34px; border: 0; border-radius: 4px; color: #89a0a3; background: transparent; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; }
-.route-pref button:hover { color: #f0f5ee; }
-.route-pref button.active { color: #10262e; background: var(--gold); }
-.route-pref ~ .summary-metrics { margin-top: 10px; }
-.alt-note { display: block; width: 100%; margin-top: 9px; padding: 0 2px; border: 0; color: #9fb6b8; background: transparent; font-size: .72rem; line-height: 1.4; text-align: left; }
-.alt-note:hover { color: var(--route); text-decoration: underline; }
 .copy-actions { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .summary-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 23px; overflow: hidden; border: 1px solid rgba(255, 255, 255, .12); border-radius: 5px; background: rgba(255, 255, 255, .11); }
 .summary-metrics article { min-height: 82px; padding: 13px 14px; background: rgba(7, 22, 29, .55); }
@@ -210,6 +203,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .fare-name span { display: block; overflow: hidden; margin-top: 3px; color: #728289; font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }
 .money { text-align: right; white-space: nowrap; }
 .money b { display: block; font-family: Georgia, "Times New Roman", serif; font-size: .96rem; font-weight: 600; }
+.fare-alt { grid-column: 1 / -1; margin: -4px 0 0; padding-top: 7px; border-top: 1px dashed #dbd1bd; color: #5d6f73; font-size: .72rem; line-height: 1.35; }
+.fare-alt b { color: #2f6b52; font-weight: 700; }
 .money small { color: #7e8b8f; font-size: .62rem; }
 .empty-fares { margin: 6px 0; color: #6f7f84; font-size: .78rem; }
 .itinerary-section summary { list-style: none; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
