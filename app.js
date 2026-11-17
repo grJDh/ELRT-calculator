@@ -44,7 +44,7 @@
   });
   BASE_STATIONS.Thaliost.l=[-7,-7,"end"];
   BASE_STATIONS["First Tower"].l=[7,10,"start"];
-  const DEFAULTS = {speed:30,layover:1,routeMode:"fastest",passengers:1,fares:[],connections:[],disabledConnections:[],customStations:[]};
+  const DEFAULTS = {speed:30,layover:1,routeMode:"fastest",fares:[],connections:[],disabledConnections:[],customStations:[]};
   // localStorage can be unavailable (private mode, blocked site data) or full; never let that break the app.
   const STORAGE_KEY="lightningRailSettings";
   function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
@@ -133,7 +133,6 @@
       speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
       layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
       routeMode:saved.routeMode === "shortest" ? "shortest" : "fastest",
-      passengers:Math.min(999,Math.max(1,Math.floor(Number(saved.passengers)) || 1)),
       fares,
       connections:savedConnections.map(([from,to,miles]) => [from,to,Number(miles)]),
       disabledConnections:Array.isArray(saved.disabledConnections) ? [...new Set(saved.disabledConnections.filter(key => typeof key === "string" && isBuiltInEdge(key)))] : [],
@@ -377,8 +376,7 @@
     els.fareList.replaceChildren(...fares.map(fare => {
       const item=document.createElement("article"); item.className=`fare-item${fare.source === "custom" ? " custom" : ""}`;
       const basis=fare.basis === "mile" ? `${fare.price} gp per mile` : fare.basis === "hour" ? `${fare.price} gp per hour` : `${fare.price} gp per day`;
-      const each=ticketPrice(fare), party=settings.passengers;
-      item.innerHTML=`<div class="fare-name"><strong>${escapeHtml(fare.tier)}</strong><span>${escapeHtml(fare.sourceName)} · ${basis}</span></div><div class="money"><b>${formatMoney(each*party)}</b><small>${party > 1 ? `${party} passengers · ${formatMoney(each)} each` : "estimated fare"}</small></div>`;
+      item.innerHTML=`<div class="fare-name"><strong>${escapeHtml(fare.tier)}</strong><span>${escapeHtml(fare.sourceName)} · ${basis}</span></div><div class="money"><b>${formatMoney(ticketPrice(fare))}</b><small>estimated fare</small></div>`;
       return item;
     }));
     if (!fares.length) {
@@ -386,7 +384,7 @@
     }
   }
 
-  // One ticket, rounded to whole copper so that party totals are exact multiples.
+  // One ticket, rounded to whole copper.
   function ticketPrice(fare) { return Math.round(calculateFare(fare,currentJourney)*100)/100; }
   function visibleFares() {
     const filter=els.fareFilter.value;
@@ -773,7 +771,7 @@
     storageSet("lightningRailSettingsBeforeImport",JSON.stringify(settings));
     settings=imported; persistSettings();
     resetTownEditor(); $("showCustom").checked=settings.showCustom !== false;
-    setRouteMode(settings.routeMode); $("partySize").value=settings.passengers; refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
+    setRouteMode(settings.routeMode); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
     toast("Backup imported");
   });
   $("settingsButton").addEventListener("click",openSettings); $("addFare").addEventListener("click",()=>addFareRow());
@@ -800,15 +798,15 @@
   });
   $("copyButton").addEventListener("click",async()=>{
     if (!currentJourney) return;
-    const j=currentJourney, party=settings.passengers, stops=Math.max(0,j.path.length-2);
+    const j=currentJourney, stops=Math.max(0,j.path.length-2);
     const lines=[
       `${j.start} to ${j.end} (${settings.routeMode} route)`,
       `${j.distance.toLocaleString()} miles · ${formatDuration(j.hours)} · ${stops} ${stops === 1 ? "stop" : "stops"}`,
       "",
       ...j.segments.map(segment => `${segment.from} → ${segment.to}: ${segment.distance.toLocaleString()} mi`),
       "",
-      party > 1 ? `Fares for ${party} passengers:` : "Fares:",
-      ...visibleFares().map(fare => `${fare.tier} (${fare.sourceName}): ${formatMoney(ticketPrice(fare)*party)}${party > 1 ? ` (${formatMoney(ticketPrice(fare))} each)` : ""}`),
+      "Fares per passenger:",
+      ...visibleFares().map(fare => `${fare.tier} (${fare.sourceName}): ${formatMoney(ticketPrice(fare))}`),
       "",
       location.href
     ];
@@ -818,13 +816,6 @@
     try { await navigator.clipboard.writeText(location.href); toast("Link to this journey copied"); } catch { toast("Could not copy link"); }
   });
   $("altNote").addEventListener("click",()=>$(settings.routeMode === "shortest" ? "modeFastest" : "modeShortest").click());
-  $("partySize").value=settings.passengers;
-  $("partySize").addEventListener("input",()=>{
-    const value=Math.floor(Number($("partySize").value));
-    if (!(value >= 1)) return; // let the user finish typing
-    settings.passengers=Math.min(999,value); persistSettings(); renderFares();
-  });
-  $("partySize").addEventListener("change",()=>{ $("partySize").value=settings.passengers; });
   // A shared link (#from=…&to=…) overrides the default journey.
   const linked=new URLSearchParams(location.hash.slice(1));
   [["from",els.from],["to",els.to]].forEach(([key,input])=>{ const name=normalizedStation(linked.get(key) || ""); if (name) input.value=name; });
