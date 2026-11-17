@@ -62,6 +62,7 @@
               <div class="backup-actions">
                 <button id="exportNetwork" class="text-button" type="button">Export backup</button>
                 <button id="importNetwork" class="text-button" type="button">Import backup</button>
+                <button id="resetNetwork" class="text-button danger" type="button">Reset network</button>
                 <input id="importFile" type="file" accept=".json,application/json" hidden>
               </div>
             </details>
@@ -80,7 +81,7 @@
               </div>
               <div class="custom-route-heading"><span>Custom connections</span><strong id="customRouteCount">0</strong></div>
               <div id="customRouteList" class="custom-route-list"></div>
-              <div class="custom-route-heading removed-heading"><span>Removed built-in connections</span><strong id="removedRouteCount">0</strong></div>
+              <div class="custom-route-heading removed-heading"><span>Removed connections</span><strong id="removedRouteCount">0</strong></div>
               <div id="removedRouteList" class="custom-route-list"></div>
             </div>
             <div id="townTools" role="tabpanel" aria-labelledby="townsTab" hidden>
@@ -145,6 +146,10 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-5-5 5 5-5 5"/></svg>
               <div><span>To</span><strong id="summaryTo">Flamekeep</strong></div>
             </div>
+            <div class="route-pref" role="group" aria-label="Route preference">
+              <button id="modeFastest" class="active" type="button" aria-pressed="true" title="Least travel time, layovers included">Fastest</button>
+              <button id="modeShortest" type="button" aria-pressed="false" title="Fewest miles; cheapest on per-mile fares">Shortest</button>
+            </div>
             <div class="summary-metrics">
               <article><span>Distance</span><strong id="distanceValue">-</strong><small>miles</small></article>
               <article><span>Travel time</span><strong id="timeValue">-</strong><small id="timeNote">including stops</small></article>
@@ -178,7 +183,7 @@
     <form method="dialog" class="dialog-shell">
       <div class="dialog-header">
         <div><p class="eyebrow">Calculator setup</p><h2>Journey settings</h2></div>
-        <button class="round-button" value="cancel" aria-label="Close settings" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button id="closeSettings" class="round-button" aria-label="Close settings" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
       <div class="dialog-body">
         <section class="settings-section">
@@ -191,12 +196,13 @@
         <section class="settings-section">
           <div class="settings-title"><div><h3>Custom fares</h3><p>Add campaign-specific ticket classes. Custom rail connections are managed directly on the map.</p></div></div>
           <div id="fareRows" class="editor-list"></div>
+          <p id="settingsError" class="network-error" role="alert" hidden></p>
           <button id="addFare" type="button" class="secondary-button">+ Add fare</button>
         </section>
       </div>
       <div class="dialog-actions">
-        <button id="resetSettings" type="button" class="text-button danger">Reset defaults</button>
-        <button id="saveSettings" type="button" class="primary-button">Save settings</button>
+        <button id="resetSettings" type="button" class="text-button danger">Reset speed &amp; fares</button>
+        <button id="saveSettings" type="submit" class="primary-button">Save settings</button>
       </div>
     </form>
   </dialog>

@@ -44,7 +44,7 @@
   });
   BASE_STATIONS.Thaliost.l=[-7,-7,"end"];
   BASE_STATIONS["First Tower"].l=[7,10,"start"];
-  const DEFAULTS = {speed:30,layover:1,fares:[],connections:[],disabledConnections:[],customStations:[]};
+  const DEFAULTS = {speed:30,layover:1,routeMode:"fastest",fares:[],connections:[],disabledConnections:[],customStations:[]};
   // localStorage can be unavailable (private mode, blocked site data) or full; never let that break the app.
   const STORAGE_KEY="lightningRailSettings";
   function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
@@ -132,6 +132,7 @@
     return {
       speed:Number(saved.speed) > 0 ? Number(saved.speed) : DEFAULTS.speed,
       layover:Number(saved.layover) >= 0 ? Number(saved.layover) : DEFAULTS.layover,
+      routeMode:saved.routeMode === "shortest" ? "shortest" : "fastest",
       fares,
       connections:savedConnections.map(([from,to,miles]) => [from,to,Number(miles)]),
       disabledConnections:Array.isArray(saved.disabledConnections) ? [...new Set(saved.disabledConnections.filter(key => typeof key === "string" && isBuiltInEdge(key)))] : [],
@@ -191,34 +192,39 @@
     return graph;
   }
 
-  // Fastest route: each leg costs miles / speed, plus a layover whenever the train passes through a stop.
-  function shortestPath(start,end) {
+  // Each leg takes miles / speed, plus a layover whenever the train passes through a stop.
+  // "fastest" minimises hours (ties: fewer miles); "shortest" minimises miles (ties: fewer hours).
+  function shortestPath(start,end,mode=settings.routeMode) {
     const graph = makeGraph();
     if (!graph[start] || !graph[end]) return null;
     const speed=settings.speed > 0 ? settings.speed : DEFAULTS.speed, layover=settings.layover >= 0 ? settings.layover : 0;
-    const distance = Object.fromEntries(Object.keys(graph).map(node => [node,Infinity]));
+    const nodes = Object.keys(graph);
+    const hours = Object.fromEntries(nodes.map(node => [node,Infinity]));
+    const miles = Object.fromEntries(nodes.map(node => [node,Infinity]));
+    const [primary,secondary] = mode === "shortest" ? [miles,hours] : [hours,miles];
+    const better = (p,s,node) => p < primary[node] || (p === primary[node] && s < secondary[node]);
     const previous = {};
-    const unvisited = new Set(Object.keys(graph));
-    distance[start] = 0;
+    const unvisited = new Set(nodes);
+    hours[start] = 0; miles[start] = 0;
     while (unvisited.size) {
       let current = null;
-      for (const node of unvisited) if (current === null || distance[node] < distance[current]) current = node;
-      if (current === null || distance[current] === Infinity) break;
+      for (const node of unvisited) if (current === null || better(primary[node],secondary[node],current)) current = node;
+      if (current === null || primary[current] === Infinity) break;
       unvisited.delete(current);
       if (current === end) break;
       graph[current].forEach(edge => {
-        const candidate = distance[current] + edge.distance/speed + (current === start ? 0 : layover);
-        if (candidate < distance[edge.name]) { distance[edge.name] = candidate; previous[edge.name] = current; }
+        const h = hours[current] + edge.distance/speed + (current === start ? 0 : layover), m = miles[current] + edge.distance;
+        if (mode === "shortest" ? better(m,h,edge.name) : better(h,m,edge.name)) { hours[edge.name] = h; miles[edge.name] = m; previous[edge.name] = current; }
       });
     }
-    if (distance[end] === Infinity) return null;
+    if (primary[end] === Infinity) return null;
     const path = [];
     for (let at=end; at; at=previous[at]) { path.unshift(at); if (at === start) break; }
     const segments = path.slice(0,-1).map((from,index) => {
       const to = path[index+1];
       return {from,to,distance:graph[from].find(edge => edge.name === to).distance};
     });
-    return {path,segments,distance:segments.reduce((sum,segment) => sum+segment.distance,0),hours:distance[end]};
+    return {path,segments,distance:segments.reduce((sum,segment) => sum+segment.distance,0),hours:hours[end]};
   }
 
   function normalizedStation(value) {
@@ -469,7 +475,7 @@
       },true);
     } else {
       action("Place town here",()=>{
-        openNetworkEditor(); setNetworkPanel("towns"); startTownPlacement(); selectTownPosition(event); els.townName.focus();
+        openNetworkEditor(); setNetworkPanel("towns"); resetTownEditor(); startTownPlacement(); selectTownPosition(event); els.townName.focus();
       });
     }
     menu.hidden=false;
@@ -538,7 +544,7 @@
   }
   function showNetworkError(message) { els.networkError.textContent=message; els.networkError.hidden=false; }
   function removeNetworkRoute(index) {
-    settings.connections.splice(index,1); persistSettings(); renderCustomRoutes(); updateNetworkActions(); planJourney(); renderMap(); toast("Custom connection removed");
+    settings.connections.splice(index,1); persistSettings(); renderCustomRoutes(); renderRemovedRoutes(); updateNetworkActions(); planJourney(); renderMap(); toast("Custom connection removed");
   }
   function removeSelectedNetworkRoute() {
     const from=els.networkFrom.value,to=els.networkTo.value;
@@ -568,15 +574,31 @@
       const empty=document.createElement("p"); empty.className="custom-route-empty"; empty.textContent="No custom connections yet."; els.customRouteList.append(empty);
     }
   }
+  // Reference-map railways that were seeded once and have since been deleted; both towns must still exist.
+  function removedReferenceRoutes() {
+    const present=new Set(settings.connections.map(connection => edgeKey(connection[0],connection[1])));
+    return [...FIXED_LINKS,...window.RAIL_ATLAS.routes.map(([a,b,h])=>[a,b,h*30])]
+      .filter(([a,b]) => !present.has(edgeKey(a,b)) && !isBuiltInEdge(edgeKey(a,b)) && getStation(a) && getStation(b));
+  }
+  function restoreReferenceRoute(connection) {
+    const key=edgeKey(connection[0],connection[1]);
+    if (!settings.connections.some(item => edgeKey(item[0],item[1]) === key)) settings.connections.push([...connection]);
+    persistSettings(); renderCustomRoutes(); renderRemovedRoutes(); updateNetworkActions(); planJourney(); renderMap(); toast("Reference-map connection restored");
+  }
   function renderRemovedRoutes() {
-    els.removedRouteCount.textContent=settings.disabledConnections.length;
-    els.removedRouteList.replaceChildren(...settings.disabledConnections.map(key => {
-      const [from,to]=key.split("|"), item=document.createElement("div"); item.className="custom-route-item removed";
-      item.innerHTML=`<strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>disabled</span><button type="button">Restore</button>`;
-      item.querySelector("button").addEventListener("click",()=>restoreBuiltInRoute(key)); return item;
-    }));
-    if (!settings.disabledConnections.length) {
-      const empty=document.createElement("p"); empty.className="custom-route-empty"; empty.textContent="No built-in connections removed."; els.removedRouteList.append(empty);
+    const reference=removedReferenceRoutes();
+    const row=(from,to,note,restore) => {
+      const item=document.createElement("div"); item.className="custom-route-item removed";
+      item.innerHTML=`<strong>${escapeHtml(from)} → ${escapeHtml(to)}</strong><span>${note}</span><button type="button" aria-label="Restore ${escapeHtml(from)} to ${escapeHtml(to)}">Restore</button>`;
+      item.querySelector("button").addEventListener("click",restore); return item;
+    };
+    els.removedRouteCount.textContent=settings.disabledConnections.length+reference.length;
+    els.removedRouteList.replaceChildren(
+      ...settings.disabledConnections.map(key => { const [from,to]=key.split("|"); return row(from,to,"built-in",()=>restoreBuiltInRoute(key)); }),
+      ...reference.map(connection => row(connection[0],connection[1],`reference map · ${connection[2].toLocaleString()} mi`,()=>restoreReferenceRoute(connection)))
+    );
+    if (!settings.disabledConnections.length && !reference.length) {
+      const empty=document.createElement("p"); empty.className="custom-route-empty"; empty.textContent="No connections removed."; els.removedRouteList.append(empty);
     }
   }
   function startTownPlacement() {
@@ -613,7 +635,7 @@
     editingTown=null; $("cancelTownEdit").hidden=true; persistSettings();
     draftTownPoint=null; els.townName.value=""; els.townRegion.value=""; els.saveTownButton.disabled=true;
     els.townPlacementStatus.classList.remove("ready"); els.townPlacementStatus.querySelector("span").textContent="No map position selected";
-    refreshStationOptions(); renderCustomTowns(); renderCustomRoutes(); planJourney(); toast(`${name} saved`);
+    refreshStationOptions(); renderCustomTowns(); renderCustomRoutes(); renderRemovedRoutes(); planJourney(); toast(`${name} saved`);
   }
   function showTownError(message) { els.townError.textContent=message; els.townError.hidden=false; }
   function renderCustomTowns() {
@@ -651,7 +673,7 @@
     settings.customStations=settings.customStations.filter(s=>s.name!==name);
     settings.connections=settings.connections.filter(c=>c[0]!==name && c[1]!==name);
     if (editingTown===name) resetTownEditor();
-    persistSettings(); refreshStationOptions(); renderCustomTowns(); renderCustomRoutes(); updateNetworkActions(); planJourney(); toast("Town and connections removed");
+    persistSettings(); refreshStationOptions(); renderCustomTowns(); renderCustomRoutes(); renderRemovedRoutes(); updateNetworkActions(); planJourney(); toast("Town and connections removed");
   }
   function refreshStationOptions() {
     const fromValue=els.networkFrom.value, toValue=els.networkTo.value;
@@ -669,13 +691,23 @@
   }
   function openSettings() {
     els.speed.value=settings.speed; els.layover.value=settings.layover;
-    els.fareRows.replaceChildren(); settings.fares.forEach(addFareRow); els.dialog.showModal();
+    els.fareRows.replaceChildren(); settings.fares.forEach(addFareRow); $("settingsError").hidden=true; els.dialog.showModal();
   }
   function saveSettings() {
-    const fares=[...els.fareRows.children].map(row => ({
-      name:row.querySelector('[data-field="name"]').value.trim(),tier:row.querySelector('[data-field="tier"]').value.trim(),
-      price:Number(row.querySelector('[data-field="price"]').value),basis:row.querySelector('[data-field="basis"]').value
-    })).filter(fare => fare.name && fare.tier && fare.price >= 0);
+    const fares=[];
+    for (const row of els.fareRows.children) {
+      const field=name => row.querySelector(`[data-field="${name}"]`);
+      const name=field("name").value.trim(), tier=field("tier").value.trim(), priceText=field("price").value.trim(), price=Number(priceText);
+      if (!name && !tier && !priceText) continue; // untouched row
+      // Incomplete rows are reported instead of being dropped silently.
+      const missing=!name ? "name" : !tier ? "tier" : !priceText || !Number.isFinite(price) || price < 0 ? "price" : null;
+      if (missing) {
+        $("settingsError").textContent=missing === "price" ? "Every custom fare needs a price of zero or more." : `Every custom fare needs a ${missing === "tier" ? "class" : "name"}. Fill it in or remove the row.`;
+        $("settingsError").hidden=false; field(missing).focus(); return;
+      }
+      fares.push({name,tier,price,basis:field("basis").value});
+    }
+    $("settingsError").hidden=true;
     settings={...settings,speed:Math.max(1,Number(els.speed.value)||30),layover:Math.max(0,Number(els.layover.value)||0),fares};
     persistSettings(); els.dialog.close(); planJourney(); toast("Journey settings saved");
   }
@@ -721,13 +753,30 @@
     storageSet("lightningRailSettingsBeforeImport",JSON.stringify(settings));
     settings=imported; persistSettings();
     resetTownEditor(); $("showCustom").checked=settings.showCustom !== false;
-    refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
+    setRouteMode(settings.routeMode); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney();
     toast("Backup imported");
   });
-  $("settingsButton").addEventListener("click",openSettings); $("addFare").addEventListener("click",()=>addFareRow()); $("saveSettings").addEventListener("click",saveSettings);
+  $("settingsButton").addEventListener("click",openSettings); $("addFare").addEventListener("click",()=>addFareRow());
+  // Enter in any field saves; the close button no longer acts as the form's default button.
+  els.dialog.querySelector("form").addEventListener("submit",event=>{ event.preventDefault(); saveSettings(); });
+  $("closeSettings").addEventListener("click",()=>els.dialog.close());
+  const setRouteMode=mode=>{
+    settings.routeMode=mode === "shortest" ? "shortest" : "fastest";
+    [["modeFastest","fastest"],["modeShortest","shortest"]].forEach(([id,value])=>{ $(id).classList.toggle("active",settings.routeMode === value); $(id).setAttribute("aria-pressed",String(settings.routeMode === value)); });
+  };
+  $("modeFastest").addEventListener("click",()=>{ setRouteMode("fastest"); persistSettings(); planJourney(); });
+  $("modeShortest").addEventListener("click",()=>{ setRouteMode("shortest"); persistSettings(); planJourney(); });
+  setRouteMode(settings.routeMode);
   $("resetSettings").addEventListener("click",()=>{
-    if (!window.confirm("Reset fares, custom towns, and railways to atlas defaults?")) return;
-    settings=seededDefaults(); persistSettings(); resetTownEditor(); $("showCustom").checked=true; els.speed.value=settings.speed; els.layover.value=settings.layover; els.fareRows.replaceChildren(); refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas defaults restored");
+    if (!window.confirm("Reset rail speed, layover and custom fares to defaults?\n\nYour towns and railways are kept.")) return;
+    settings={...settings,speed:DEFAULTS.speed,layover:DEFAULTS.layover,fares:[]}; persistSettings();
+    els.speed.value=settings.speed; els.layover.value=settings.layover; els.fareRows.replaceChildren(); $("settingsError").hidden=true; planJourney(); toast("Journey settings reset");
+  });
+  $("resetNetwork").addEventListener("click",()=>{
+    if (!window.confirm("Reset towns and railways to atlas defaults?\n\nYour own towns, connections and removals will be lost. Fares, speed and layover are kept.")) return;
+    storageSet("lightningRailSettingsBeforeReset",JSON.stringify(settings));
+    settings={...seededDefaults(),speed:settings.speed,layover:settings.layover,fares:settings.fares,routeMode:settings.routeMode}; persistSettings();
+    resetTownEditor(); $("showCustom").checked=true; refreshStationOptions(); renderCustomRoutes(); renderRemovedRoutes(); renderCustomTowns(); updateNetworkActions(); planJourney(); toast("Atlas network restored");
   });
   $("copyButton").addEventListener("click",async()=>{
     if (!currentJourney) return;
